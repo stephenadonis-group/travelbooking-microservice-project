@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: booking-service-monitor
+  namespace: travel-booking
+  labels:
+    app: booking-service
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: booking-service
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - travel-booking

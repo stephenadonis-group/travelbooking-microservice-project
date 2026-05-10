@@ -1,0 +1,181 @@
+# ─── Prometheus Stack Custom Values ───────────────────────────────────────────
+# This file configures the kube-prometheus-stack Helm chart which installs:
+# Prometheus, Grafana, Alertmanager, Node Exporter, and kube-state-metrics
+
+# ─── Grafana ──────────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+
+  adminUser: "admin"
+  adminPassword: "admin@123"
+
+  service:
+    type: NodePort
+
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClassName: standard
+
+  # Pre-configured dashboards for the TravelBooking app
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+  dashboardsConfigMaps:
+    default: grafana-dashboards
+
+  # Pre-configured data sources
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-kube-prometheus-prometheus:9090
+        access: proxy
+        isDefault: true
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ─── Prometheus ───────────────────────────────────────────────────────────────
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1
+        memory: 2Gi
+
+    # Scrape TravelBooking services on /metrics endpoint
+    additionalScrapeConfigs:
+    - job_name: 'travelbooking-user-service'
+      kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names: ['travel-booking']
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: user-service-service
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        regex: http
+        action: keep
+
+    - job_name: 'travelbooking-search-service'
+      kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names: ['travel-booking']
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: search-service-service
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        regex: http
+        action: keep
+
+    - job_name: 'travelbooking-booking-service'
+      kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names: ['travel-booking']
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: booking-service-service
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        regex: http
+        action: keep
+
+    - job_name: 'travelbooking-payment-service'
+      kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names: ['travel-booking']
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: payment-service-service
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        regex: http
+        action: keep
+
+    - job_name: 'travelbooking-notification-service'
+      kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names: ['travel-booking']
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: notification-service-service
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        regex: http
+        action: keep
+
+    - job_name: 'travelbooking-frontend'
+      metrics_path: /stub_status
+      kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names: ['travel-booking']
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: frontend-service
+        action: keep
+
+# ─── Alertmanager ─────────────────────────────────────────────────────────────
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+# ─── Node Exporter ────────────────────────────────────────────────────────────
+nodeExporter:
+  enabled: true
+
+# ─── Kube State Metrics ──────────────────────────────────────────────────────
+kubeStateMetrics:
+  enabled: true

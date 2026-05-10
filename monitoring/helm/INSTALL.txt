@@ -1,0 +1,33 @@
+# Prometheus & Grafana Install Commands
+
+## Step 1: Add Helm repos
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+## Step 2: Create monitoring namespace
+kubectl create namespace monitoring
+
+## Step 3: Install kube-prometheus-stack
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --values monitoring/helm/values.yaml \
+  --wait
+
+## Step 4: Apply ServiceMonitors
+kubectl apply -f monitoring/servicemonitors/ -n travel-booking
+
+## Step 5: Apply Alert Rules
+kubectl apply -f monitoring/alertrules/ -n monitoring
+
+## Step 6: Apply Dashboards
+kubectl apply -f monitoring/dashboards/ -n monitoring
+
+## Access Grafana locally
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
+# Open: http://localhost:3000
+# Username: admin
+# Password: TravelBook@Admin123
+
+## Access Prometheus locally
+kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring
+# Open: http://localhost:9090

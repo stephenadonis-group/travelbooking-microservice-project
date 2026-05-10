@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  namespace: {{ .Values.namespace }}
+data:
+  init.sql: |
+    CREATE DATABASE {{ .Values.db.userDb }};
+    CREATE DATABASE {{ .Values.db.searchDb }};
+    CREATE DATABASE {{ .Values.db.bookingDb }};
+    CREATE DATABASE {{ .Values.db.paymentDb }};
+    CREATE DATABASE {{ .Values.db.notificationDb }};

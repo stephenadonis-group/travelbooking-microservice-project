@@ -1,0 +1,89 @@
+namespace: travel-booking
+
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+frontend:
+  deploymentname: frontend-deployment
+  servicename: frontend-service
+  image: us-central1-docker.pkg.dev/test-project-492810/travel-booking/frontend:latest
+  replicas: 1
+  hpa: frontend-autoscaler
+  host: travel.example.com
+  secretname: frontend-tls
+
+# ─── User Service ─────────────────────────────────────────────────────────────
+userService:
+  deploymentname: user-service-deployment
+  servicename: user-service-service
+  image: us-central1-docker.pkg.dev/test-project-492810/travel-booking/user-service:latest
+  replicas: 1
+  hpa: user-service-autoscaler
+  host: api.travel.example.com
+  secretname: user-service-tls
+
+# ─── Search Service ───────────────────────────────────────────────────────────
+searchService:
+  deploymentname: search-service-deployment
+  servicename: search-service-service
+  image: us-central1-docker.pkg.dev/test-project-492810/travel-booking/search-service:latest
+  replicas: 1
+  hpa: search-service-autoscaler
+
+# ─── Booking Service ──────────────────────────────────────────────────────────
+bookingService:
+  deploymentname: booking-service-deployment
+  servicename: booking-service-service
+  image: us-central1-docker.pkg.dev/test-project-492810/travel-booking/booking-service:latest
+  replicas: 1
+  hpa: booking-service-autoscaler
+
+# ─── Payment Service ──────────────────────────────────────────────────────────
+paymentService:
+  deploymentname: payment-service-deployment
+  servicename: payment-service-service
+  image: us-central1-docker.pkg.dev/test-project-492810/travel-booking/payment-service:latest
+  replicas: 1
+  hpa: payment-service-autoscaler
+
+# ─── Notification Service ─────────────────────────────────────────────────────
+notificationService:
+  deploymentname: notification-service-deployment
+  servicename: notification-service-service
+  image: us-central1-docker.pkg.dev/test-project-492810/travel-booking/notification-service:latest
+  replicas: 1
+  hpa: notification-service-autoscaler
+
+# ─── PostgreSQL StatefulSet ───────────────────────────────────────────────────
+postgres:
+  name: postgres
+  servicename: postgres
+  image: postgres:15-alpine
+  storage: 10Gi
+  storageClass: standard
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+db:
+  host: postgres
+  port: "5432"
+  sslmode: disable
+  userDb: userdb
+  searchDb: searchdb
+  bookingDb: bookingdb
+  paymentDb: paymentdb
+  notificationDb: notificationdb
+
+# ─── Redis ────────────────────────────────────────────────────────────────────
+redis:
+  host: redis
+  port: "6379"
+
+# ─── Gateway ──────────────────────────────────────────────────────────────────
+gateway:
+  name: travel-booking-gateway
+  domain: vijaygiduthuri.in
+  staticIPName: travel-booking-ip
+  certificateName: travel-booking-cert
+
+# ─── Secrets ──────────────────────────────────────────────────────────────────
+secrets:
+  dbPassword: postgres
+  jwtSecret: changeme-use-a-strong-secret-in-production

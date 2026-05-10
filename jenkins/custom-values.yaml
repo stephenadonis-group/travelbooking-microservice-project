@@ -1,0 +1,145 @@
+controller:
+  admin:
+    username: "vijay"
+    password: "vijay@123"
+
+  JCasC:
+    securityRealm: |
+      local:
+        allowsSignup: false
+        enableCaptcha: false
+        users:
+          - id: "vijay"
+            name: "vijay"
+            password: "vijay@123"
+
+    authorizationStrategy: |
+      loggedInUsersCanDoAnything:
+        allowAnonymousRead: false
+
+    configScripts:
+      cloud-config: |
+        jenkins:
+          clouds:
+            - kubernetes:
+                name: "jenkins"
+                jenkinsTunnel: "jenkins-agent.default.svc.cluster.local:50000"
+                jenkinsUrl: "http://jenkins.default.svc.cluster.local:8080/jenkins"
+                containerCapStr: "10"
+                maxRequestsPerHostStr: "32"
+                templates:
+                  - name: "travel-booking"
+                    label: "travelbooking"
+                    namespace: "default"
+                    yaml: |
+                      apiVersion: v1
+                      kind: Pod
+                      spec:
+                        containers:
+                          - name: "jnlp"
+                            image: "jenkins/inbound-agent:latest"
+                            workingDir: "/home/jenkins"
+
+                          - name: "kaniko"
+                            workingDir: "/home/jenkins"
+                            image: "gcr.io/kaniko-project/executor:debug"
+                            imagePullPolicy: "IfNotPresent"
+                            command:
+                              - "/busybox/cat"
+                            tty: true
+
+                          - name: "nodejs"
+                            workingDir: "/home/jenkins"
+                            image: "node:20.10.0"
+                            imagePullPolicy: "IfNotPresent"
+                            command:
+                              - "cat"
+                            tty: true
+
+                          - name: "golang"
+                            workingDir: "/home/jenkins"
+                            image: "golang:1.21"
+                            imagePullPolicy: "IfNotPresent"
+                            command:
+                              - "cat"
+                            tty: true
+
+                          - name: "docker"
+                            workingDir: "/home/jenkins"
+                            image: "docker:20.10.24-dind"
+                            imagePullPolicy: "IfNotPresent"
+                            command:
+                              - "cat"
+                            tty: true
+                            securityContext:
+                              privileged: true
+                            volumeMounts:
+                              - name: "dockersock"
+                                mountPath: "/var/run/docker.sock"
+
+                          - name: "helm"
+                            workingDir: "/home/jenkins"
+                            image: "alpine/helm:3.14.0"
+                            imagePullPolicy: "IfNotPresent"
+                            command:
+                              - "cat"
+                            tty: true
+
+                          - name: "gcloud"
+                            workingDir: "/home/jenkins"
+                            image: "google/cloud-sdk:slim"
+                            imagePullPolicy: "IfNotPresent"
+                            command:
+                              - "cat"
+                            tty: true
+
+                        volumes:
+                          - name: "dockersock"
+                            hostPath:
+                              path: "/var/run/docker.sock"
+
+  installPlugins:
+    - kubernetes:latest
+    - git:latest
+    - blueocean:latest
+    - workflow-job:latest
+    - workflow-aggregator:latest
+    - credentials-binding:latest
+    - github:latest
+    - configuration-as-code:latest
+    - role-strategy:latest
+    - matrix-auth:latest
+    - pipeline-github-lib:latest
+    - github-pullrequest:latest
+    - pipeline-stage-view:latest
+    - pipeline-build-step:latest
+    - pipeline-milestone-step:latest
+    - pipeline-graph-view:latest
+    - timestamper:latest
+    - ansicolor:latest
+    - ws-cleanup:latest
+    - docker-workflow:latest
+    - pipeline-utility-steps:latest
+    - rebuild:latest
+    - build-timeout:latest
+
+  javaOpts: -Xms2000m -Xmx2000m
+  jenkinsUrl: "http://vijaygiduthuri.in/jenkins/"
+  jenkinsUriPrefix: "/jenkins"
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2000Mi
+    requests:
+      cpu: 100m
+      memory: 1024Mi
+
+  serviceType: NodePort
+
+persistence:
+  enabled: true
+  size: 15Gi
+  storageClass: premium-rwo
+
+serviceAccount:
+  name: cd-jenkins

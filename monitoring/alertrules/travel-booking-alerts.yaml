@@ -1,0 +1,96 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: travel-booking-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: pod-health
+      rules:
+        - alert: PodDown
+          expr: up{namespace="travel-booking"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} is down"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been down for more than 1 minute."
+
+    - name: resource-usage
+      rules:
+        - alert: HighCPUUsage
+          expr: |
+            (sum by (pod, namespace) (rate(container_cpu_usage_seconds_total{namespace="travel-booking"}[5m]))
+            / sum by (pod, namespace) (kube_pod_container_resource_limits{resource="cpu", namespace="travel-booking"})) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU usage on pod {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} CPU usage is above 80% for 5 minutes."
+
+        - alert: HighMemoryUsage
+          expr: |
+            (sum by (pod, namespace) (container_memory_working_set_bytes{namespace="travel-booking"})
+            / sum by (pod, namespace) (kube_pod_container_resource_limits{resource="memory", namespace="travel-booking"})) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage on pod {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} memory usage is above 80% for 5 minutes."
+
+    - name: http-errors
+      rules:
+        - alert: HighHTTPErrorRate
+          expr: |
+            (sum by (job) (rate(user_http_requests_total{status_code=~"5.."}[5m]))
+            / sum by (job) (rate(user_http_requests_total[5m]))) * 100 > 5
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High HTTP error rate for {{ $labels.job }}"
+            description: "HTTP 5xx error rate is above 5% for {{ $labels.job }}."
+
+        - alert: HighResponseTime
+          expr: |
+            histogram_quantile(0.95, sum by (le, job) (rate(user_http_request_duration_seconds_bucket[5m]))) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High response time for {{ $labels.job }}"
+            description: "95th percentile response time is above 2 seconds for {{ $labels.job }}."
+
+    - name: business-metrics
+      rules:
+        - alert: HighPaymentFailureRate
+          expr: |
+            (rate(payment_failure_total[5m]) / (rate(payment_success_total[5m]) + rate(payment_failure_total[5m]))) * 100 > 10
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High payment failure rate"
+            description: "Payment failure rate is above 10% in the last 5 minutes."
+
+        - alert: BookingServiceDown
+          expr: up{job="booking-service"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Booking service is down"
+            description: "The booking service has been unreachable for more than 1 minute."
+
+        - alert: NotificationQueueBacklog
+          expr: notification_queue_size > 100
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Notification queue backlog"
+            description: "The notification queue has more than 100 pending items for 5 minutes."

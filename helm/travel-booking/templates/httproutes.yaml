@@ -1,0 +1,113 @@
+# ─── User Service HTTPRoute ────────────────────────────────────────────────────
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: user-route
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+  - name: {{ .Values.gateway.name }}
+    namespace: {{ .Values.namespace }}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api/users
+    backendRefs:
+    - name: {{ .Values.userService.servicename }}
+      port: 3001
+---
+# ─── Search Service HTTPRoute ─────────────────────────────────────────────────
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: search-route
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+  - name: {{ .Values.gateway.name }}
+    namespace: {{ .Values.namespace }}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api/search
+    backendRefs:
+    - name: {{ .Values.searchService.servicename }}
+      port: 3002
+---
+# ─── Booking Service HTTPRoute ────────────────────────────────────────────────
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: booking-route
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+  - name: {{ .Values.gateway.name }}
+    namespace: {{ .Values.namespace }}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api/bookings
+    backendRefs:
+    - name: {{ .Values.bookingService.servicename }}
+      port: 3003
+---
+# ─── Payment Service HTTPRoute ────────────────────────────────────────────────
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: payment-route
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+  - name: {{ .Values.gateway.name }}
+    namespace: {{ .Values.namespace }}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api/payments
+    backendRefs:
+    - name: {{ .Values.paymentService.servicename }}
+      port: 3004
+---
+# ─── Notification Service HTTPRoute ───────────────────────────────────────────
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: notification-route
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+  - name: {{ .Values.gateway.name }}
+    namespace: {{ .Values.namespace }}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api/notifications
+    backendRefs:
+    - name: {{ .Values.notificationService.servicename }}
+      port: 3005
+---
+# ─── Frontend HTTPRoute (catch-all — must be last) ────────────────────────────
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: frontend-route
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+  - name: {{ .Values.gateway.name }}
+    namespace: {{ .Values.namespace }}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: {{ .Values.frontend.servicename }}
+      port: 80

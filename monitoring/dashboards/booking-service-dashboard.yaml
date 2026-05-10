@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: booking-service-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  booking-service.json: |
+    {
+      "title": "Booking Service",
+      "uid": "booking-service-dash",
+      "tags": ["travel-booking", "booking-service"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "refresh": "30s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Bookings per Minute",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "rate(booking_bookings_total{type='flight'}[1m]) * 60", "legendFormat": "Flights/min"},
+            {"expr": "rate(booking_bookings_total{type='hotel'}[1m]) * 60", "legendFormat": "Hotels/min"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Cancellation Rate (%)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+          "targets": [{"expr": "rate(booking_status_total{status='cancelled'}[5m]) / rate(booking_bookings_total[5m]) * 100", "legendFormat": "Cancellation Rate %"}]
+        },
+        {
+          "id": 3,
+          "title": "Response Time Percentiles",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {"expr": "histogram_quantile(0.50, sum by(le) (rate(booking_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p50"},
+            {"expr": "histogram_quantile(0.95, sum by(le) (rate(booking_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95"},
+            {"expr": "histogram_quantile(0.99, sum by(le) (rate(booking_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p99"}
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Error Rate (%)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [
+            {"expr": "sum(rate(booking_http_requests_total{status_code=~'5..'}[5m])) / sum(rate(booking_http_requests_total[5m])) * 100", "legendFormat": "5xx Error Rate %"}
+          ]
+        }
+      ]
+    }

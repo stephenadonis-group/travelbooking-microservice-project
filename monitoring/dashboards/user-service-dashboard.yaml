@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-service-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  user-service.json: |
+    {
+      "title": "User Service",
+      "uid": "user-service-dash",
+      "tags": ["travel-booking", "user-service"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "refresh": "30s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Request Rate (RPS)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "sum by (route) (rate(user_http_requests_total[5m]))", "legendFormat": "{{route}}"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Error Rate (%)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {"expr": "sum by (route) (rate(user_http_requests_total{status_code=~'4..|5..'}[5m])) / sum by (route) (rate(user_http_requests_total[5m])) * 100", "legendFormat": "{{route}} errors %"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Response Time Percentiles",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {"expr": "histogram_quantile(0.50, sum by(le) (rate(user_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p50"},
+            {"expr": "histogram_quantile(0.95, sum by(le) (rate(user_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95"},
+            {"expr": "histogram_quantile(0.99, sum by(le) (rate(user_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p99"}
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Active Connections",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+          "targets": [{"expr": "user_active_connections", "legendFormat": "Active"}]
+        },
+        {
+          "id": 5,
+          "title": "Login Rate",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+          "targets": [
+            {"expr": "rate(user_http_requests_total{route='/api/users/login', status_code='200'}[5m])", "legendFormat": "Successful Logins/s"}
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Pod CPU Usage",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+          "targets": [
+            {"expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace='travel-booking', container='user-service'}[5m]))", "legendFormat": "{{pod}}"}
+          ]
+        }
+      ]
+    }

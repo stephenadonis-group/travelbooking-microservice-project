@@ -1,0 +1,65 @@
+# kube-prometheus-stack Helm values
+
+# ─── Prometheus ───────────────────────────────────────────────────────────────
+prometheus:
+  service:
+    type: NodePort
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    ruleSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+# ─── Grafana ──────────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+  adminPassword: "TravelBook@Admin123"
+  persistence:
+    enabled: true
+    size: 10Gi
+  service:
+    type: NodePort
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+    datasources:
+      enabled: true
+
+# ─── Alertmanager ─────────────────────────────────────────────────────────────
+alertmanager:
+  service:
+    type: NodePort
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+# ─── Node Exporter ────────────────────────────────────────────────────────────
+nodeExporter:
+  enabled: true
+
+# ─── Kube State Metrics ──────────────────────────────────────────────────────
+kubeStateMetrics:
+  enabled: true

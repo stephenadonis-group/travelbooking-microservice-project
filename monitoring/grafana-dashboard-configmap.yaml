@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  travelbooking-overview.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "title": "TravelBooking - Application Overview",
+      "uid": "travelbooking-overview",
+      "version": 1,
+      "panels": [
+        {
+          "title": "Total HTTP Requests (All Services)",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "targets": [{ "expr": "sum(increase(gin_requests_total[1h]))", "legendFormat": "Requests/hr" }],
+          "fieldConfig": { "defaults": { "thresholds": { "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1000}, {"color": "red", "value": 5000}] } } }
+        },
+        {
+          "title": "Active Pods",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+          "targets": [{ "expr": "count(kube_pod_status_phase{namespace='travel-booking', phase='Running'})", "legendFormat": "Running Pods" }],
+          "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{"color": "red", "value": null}, {"color": "green", "value": 7}] } } }
+        },
+        {
+          "title": "CPU Usage by Service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [{ "expr": "sum(rate(container_cpu_usage_seconds_total{namespace='travel-booking', container!='POD', container!=''}[5m])) by (container)", "legendFormat": "{{container}}" }]
+        },
+        {
+          "title": "Memory Usage by Service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+          "targets": [{ "expr": "sum(container_memory_working_set_bytes{namespace='travel-booking', container!='POD', container!=''}) by (container) / 1024 / 1024", "legendFormat": "{{container}} (MB)" }]
+        },
+        {
+          "title": "HTTP Request Rate by Service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "targets": [{ "expr": "sum(rate(gin_requests_total[5m])) by (service)", "legendFormat": "{{service}}" }]
+        },
+        {
+          "title": "HTTP Response Time (p95)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+          "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(gin_request_duration_seconds_bucket[5m])) by (le, service))", "legendFormat": "{{service}} p95" }]
+        },
+        {
+          "title": "Pod Restarts",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+          "targets": [{ "expr": "sum(kube_pod_container_status_restarts_total{namespace='travel-booking'})", "legendFormat": "Total Restarts" }],
+          "fieldConfig": { "defaults": { "thresholds": { "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 5}, {"color": "red", "value": 10}] } } }
+        },
+        {
+          "title": "PostgreSQL Up",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
+          "targets": [{ "expr": "kube_pod_status_phase{namespace='travel-booking', pod=~'postgres.*', phase='Running'}", "legendFormat": "PostgreSQL" }],
+          "fieldConfig": { "defaults": { "mappings": [{"type": "value", "options": {"1": {"text": "UP", "color": "green"}, "0": {"text": "DOWN", "color": "red"}}}] } }
+        }
+      ],
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s",
+      "schemaVersion": 38
+    }

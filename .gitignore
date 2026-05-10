@@ -1,0 +1,48 @@
+# ─── Credentials & Secrets (NEVER commit) ─────────────────────────────────────
+service-account.json
+keys.json
+*.pem
+*.key
+
+# ─── Terraform ────────────────────────────────────────────────────────────────
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+.terraform.lock.hcl
+
+# ─── Node.js ──────────────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+
+# ─── Docker ───────────────────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ─── Jenkins Helm Chart (downloaded, not our code) ────────────────────────────
+jenkins/jenkins/
+jenkins/jenkins-*.tgz
+
+# ─── Go ───────────────────────────────────────────────────────────────────────
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ─── OS Files ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ─── IDE ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+
+# ─── Environment ──────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.production
+*.deb
+.claude/
