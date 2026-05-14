@@ -91,7 +91,13 @@ cp /path/to/your/service-account.json /home/vijay/Desktop/travelbooking_app/gcp-
 Before running any Terraform command, set this environment variable. Terraform's GCS backend (where state is stored) needs this to authenticate with your GCS bucket.
 
 ```bash
-export GOOGLE_APPLICATION_CREDENTIALS=/home/vijay/Desktop/travelbooking_app/gcp-terraform/keys.json
+echo 'export GOOGLE_APPLICATION_CREDENTIALS="/mnt/c/Users/vijay/OneDrive/Desktop/travelbooking/gcp-terraform/keys.json"' >> ~/.bashrc
+source ~/.bashrc
+
+echo $GOOGLE_APPLICATION_CREDENTIALS
+
+cat $GOOGLE_APPLICATION_CREDENTIALS | head -5
+
 ```
 
 > **Important:** This must be set in **every new terminal session** before running Terraform commands. Without this, you'll get an error: `storage.NewClient() failed: could not find default credentials`.
