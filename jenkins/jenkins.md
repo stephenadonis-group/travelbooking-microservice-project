@@ -196,7 +196,7 @@ After logging in, you need to add GCP credentials so Jenkins can push images and
    - **Kind:** Username with password
    - **Username:** your GitHub username
    - **Password:** your GitHub Personal Access Token
-   - **ID:** `github-credentials`
+   - **ID:** `github-pat`
    - **Description:** GitHub Access
 3. Click **Create**
 
