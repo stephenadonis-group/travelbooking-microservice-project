@@ -4,7 +4,7 @@ pipeline {
     environment {
         GOOGLE_APPLICATION_CREDENTIALS = credentials('gcp-service-account')
         GOOGLE_CLOUD_PROJECT           = credentials('gcp-project-id')
-        GKE_CLUSTER                    = 'cluster-1'
+        GKE_CLUSTER                    = 'travelbooking-cluster'
         GKE_ZONE                       = 'us-central1-a'
         ARTIFACT_REGISTRY              = 'us-central1-docker.pkg.dev'
         DOCKER_REPO                    = "${ARTIFACT_REGISTRY}/${GOOGLE_CLOUD_PROJECT}/travel-booking"
