@@ -4,6 +4,24 @@ A production-grade travel booking application built with microservices architect
 
 ---
 
+## About the Project
+
+TravelBooking is a production-grade travel application where users can search flights and hotels, make bookings, and process payments — similar to MakeMyTrip or Booking.com. The main focus of this project is to showcase a complete DevOps lifecycle on Google Cloud Platform.
+
+🏗️ **Architecture** — The app is built using **microservices architecture** with 6 services — a React frontend and 5 Go backend services (user, search, booking, payment, notification). Data is stored in PostgreSQL with 5 separate databases (one per service), and Redis is used for caching search results.
+
+☸️ **Kubernetes & Infrastructure** — Everything runs on **Google Kubernetes Engine (GKE)**. The GCP infrastructure (VPC, subnets, firewalls, Artifact Registry, static IP) is created using **Terraform** with state stored in Google Cloud Storage. The application is deployed using a custom **Helm chart** that creates all Kubernetes resources with one command.
+
+⚙️ **CI/CD with Jenkins** — **Jenkins** runs inside the same GKE cluster and handles CI/CD. The 14-stage pipeline clones code from GitHub, tests services, builds and pushes Docker images to Artifact Registry, scans images with Trivy, packages the Helm chart, and deploys to GKE automatically.
+
+📊 **Monitoring** — Set up with Prometheus, Grafana, and Alertmanager. Each service exposes metrics that Prometheus scrapes every 15 seconds. Grafana shows 6 custom dashboards, and Alertmanager fires alerts on pod failures, high CPU/memory, or HTTP errors.
+
+🔒 **HTTPS & SSL** — Handled by cert-manager with Let's Encrypt. Free SSL certificates are issued automatically, and the Gateway terminates TLS. All HTTP traffic is permanently redirected to HTTPS, and certificates auto-renew every 60 days.
+
+🌐 **DNS & Domain Access** — The application is accessible through a custom domain managed via **GoDaddy DNS** pointing to the GKE Gateway's static IP. All components — frontend, APIs, Jenkins, Grafana, Prometheus, Alertmanager — are accessible under the same domain with different URL paths, all secured with HTTPS.
+
+---
+
 ## Architecture Overview
 
 ```mermaid
