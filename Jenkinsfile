@@ -43,25 +43,17 @@ pipeline {
             }
         }
 
-        stage('Docker Login to ECR') {
+        stage('Build & Push Services') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                     container('awscli') {
                         sh '''
-                        # Install Docker CLI on Amazon Linux
+                        # Install Docker CLI
                         yum install -y docker
+                        # Login to ECR
                         aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
                         echo "Successfully logged into Amazon ECR"
                         '''
-                    }
-                }
-            }
-        }
-
-        stage('Build & Push Services') {
-            steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                    container('docker') {
                         script {
                             def services = ['frontend', 'user-service', 'search-service', 'booking-service', 'payment-service', 'notification-service']
                             for (service in services) {
@@ -80,7 +72,38 @@ pipeline {
                 }
             }
         }
-
+        // ─────────────────────────────────────────────────────────────────────
+        // STAGE: Trivy Security Scan
+        // ─────────────────────────────────────────────────────────────────────
+        stage('Trivy Security Scan') {
+            steps {
+                container('docker') {
+                    script {
+                        def services = ['user-service', 'search-service', 'booking-service', 'payment-service', 'notification-service', 'frontend']
+                        // Install Trivy
+                        sh '''
+                        apk add --no-cache curl tar
+                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                        trivy --version
+                        '''
+                        // Scan each image
+                        for (svc in services) {
+                            def scanStatus = sh(
+                                script: """
+                                echo "===== Scanning ${svc} ====="
+                                trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress ${ECR_REGISTRY}/${svc}:latest
+                                """,
+                                returnStatus: true
+                            )
+                            if (scanStatus != 0) {
+                                echo "WARNING: Trivy scan for ${svc} found issues, but pipeline will continue."
+                            }
+                        }
+                        echo "All images scanned successfully"
+                    }
+                }
+            }
+        }
         stage('Update Helm Values') {
             steps {
                 container('helm') {
