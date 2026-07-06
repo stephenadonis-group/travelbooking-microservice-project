@@ -48,8 +48,10 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                     container('awscli') {
                         sh '''
-                        # Install Docker CLI
+                        # Install and start Docker daemon
                         yum install -y docker
+                        dockerd > /var/log/dockerd.log 2>&1 & 
+                        sleep 5  # Wait for Docker daemon to start
                         # Login to ECR
                         aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
                         echo "Successfully logged into Amazon ECR"
