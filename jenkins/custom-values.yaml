@@ -125,7 +125,7 @@ controller:
       cpu: 100m
       memory: 1024Mi
 
-  serviceType: LoadBalancer
+  serviceType: NodePort
 
 persistence:
   enabled: false
