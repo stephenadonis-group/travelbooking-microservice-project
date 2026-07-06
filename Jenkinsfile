@@ -2,31 +2,15 @@ pipeline {
     agent { label 'travelbooking' }
 
     environment {
-        AWS_DEFAULT_REGION     = 'us-east-1'
-        AWS_ACCOUNT_ID         = credentials('aws-account-id')        // Secret text: your AWS Account ID
-        ECR_REGISTRY           = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
-        IMAGE_TAG              = "1.0.${BUILD_NUMBER}"
-        HELM_CHART_PATH        = 'helm/travel-booking'
-        NAMESPACE              = 'travel-booking'
+        AWS_DEFAULT_REGION = 'us-east-1'
+        AWS_ACCOUNT_ID     = credentials('aws-account-id')
+        ECR_REGISTRY       = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+        IMAGE_TAG          = "1.0.${BUILD_NUMBER}"
+        HELM_CHART_PATH    = 'helm/travel-booking'
+        NAMESPACE          = 'travel-booking'
     }
 
     stages {
-        // ─────────────────────────────────────────────────────────────────────
-        // STAGE 1: Clone Repository
-        // ─────────────────────────────────────────────────────────────────────
-        stage('Git Clone') {
-            steps {
-                container('docker') {
-                    git branch: 'main', credentialsId: 'github-pat', url: 'https://github.com/vijaygiduthuri/travelbooking.git'
-                    sh 'echo "Repository cloned successfully"'
-                    sh 'ls -la'
-                }
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // STAGE 2: Run Tests
-        // ─────────────────────────────────────────────────────────────────────
         stage('Test - Go Services') {
             steps {
                 container('golang') {
@@ -59,47 +43,42 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // STAGE 3: Docker Login to ECR
-        // ─────────────────────────────────────────────────────────────────────
         stage('Docker Login to ECR') {
             steps {
-                container('awscli') {
-                    sh '''
-                    aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-                    echo "Successfully logged into Amazon ECR"
-                    '''
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                    container('awscli') {
+                        sh '''
+                        aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+                        echo "Successfully logged into Amazon ECR"
+                        '''
+                    }
                 }
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // STAGE 4: Build & Push Docker Images
-        // ─────────────────────────────────────────────────────────────────────
         stage('Build & Push Services') {
             steps {
-                container('docker') {
-                    script {
-                        def services = ['frontend', 'user-service', 'search-service', 'booking-service', 'payment-service', 'notification-service']
-                        for (service in services) {
-                            sh """
-                            echo "===== Building ${service} ====="
-                            docker build -t ${ECR_REGISTRY}/${service}:${IMAGE_TAG} ./${service}
-                            docker tag ${ECR_REGISTRY}/${service}:${IMAGE_TAG} ${ECR_REGISTRY}/${service}:latest
-                            docker push ${ECR_REGISTRY}/${service}:${IMAGE_TAG}
-                            docker push ${ECR_REGISTRY}/${service}:latest
-                            docker rmi ${ECR_REGISTRY}/${service}:${IMAGE_TAG} || true
-                            echo "${service} image pushed successfully"
-                            """
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                    container('docker') {
+                        script {
+                            def services = ['frontend', 'user-service', 'search-service', 'booking-service', 'payment-service', 'notification-service']
+                            for (service in services) {
+                                sh """
+                                echo "===== Building ${service} ====="
+                                docker build -t ${ECR_REGISTRY}/${service}:${IMAGE_TAG} ./${service}
+                                docker tag ${ECR_REGISTRY}/${service}:${IMAGE_TAG} ${ECR_REGISTRY}/${service}:latest
+                                docker push ${ECR_REGISTRY}/${service}:${IMAGE_TAG}
+                                docker push ${ECR_REGISTRY}/${service}:latest
+                                docker rmi ${ECR_REGISTRY}/${service}:${IMAGE_TAG} || true
+                                echo "${service} image pushed successfully"
+                                """
+                            }
                         }
                     }
                 }
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // STAGE 5: Update Helm Values
-        // ─────────────────────────────────────────────────────────────────────
         stage('Update Helm Values') {
             steps {
                 container('helm') {
@@ -115,9 +94,6 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // STAGE 6: Deploy to EKS
-        // ─────────────────────────────────────────────────────────────────────
         stage('Deploy to EKS') {
             steps {
                 container('helm') {
