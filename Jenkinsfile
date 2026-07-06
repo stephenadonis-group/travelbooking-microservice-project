@@ -46,7 +46,7 @@ pipeline {
         stage('Docker Login to ECR') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                    container('awscli') {
+                    container('docker') {
                         sh '''
                         aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
                         echo "Successfully logged into Amazon ECR"
