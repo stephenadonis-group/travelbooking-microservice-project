@@ -48,8 +48,8 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                     container('awscli') {
                         sh '''
-                        # Install Docker client if not present
-                        apk add --no-cache docker-cli
+                        # Install Docker CLI on Amazon Linux
+                        yum install -y docker
                         aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
                         echo "Successfully logged into Amazon ECR"
                         '''
@@ -61,7 +61,7 @@ pipeline {
         stage('Build & Push Services') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                    container('awscli') {
+                    container('docker') {
                         script {
                             def services = ['frontend', 'user-service', 'search-service', 'booking-service', 'payment-service', 'notification-service']
                             for (service in services) {
