@@ -11,6 +11,8 @@ pipeline {
     }
 
     stages {
+        
+
         stage('Test - Go Services') {
             steps {
                 container('golang') {
@@ -46,9 +48,15 @@ pipeline {
         stage('Docker Login to ECR') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+                    container('awscli') {
+                        sh '''
+                        aws ecr get-login-password --region $AWS_DEFAULT_REGION > /tmp/ecr-login.txt
+                        echo "Retrieved ECR login password"
+                        '''
+                    }
                     container('docker') {
                         sh '''
-                        aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+                        cat /tmp/ecr-login.txt | docker login --username AWS --password-stdin $ECR_REGISTRY
                         echo "Successfully logged into Amazon ECR"
                         '''
                     }
