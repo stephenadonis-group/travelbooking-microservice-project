@@ -48,6 +48,13 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                     container('kaniko') {
                         sh '''
+                        # Install AWS CLI in Kaniko container
+                        apk add --no-cache curl unzip
+                        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                        unzip awscliv2.zip
+                        ./aws/install
+                        rm -rf awscliv2.zip aws
+        
                         echo "===== Configuring Amazon ECR Authentication ====="
                         mkdir -p /kaniko/.docker
                         PASSWORD=$(aws ecr get-login-password --region ${AWS_DEFAULT_REGION})
