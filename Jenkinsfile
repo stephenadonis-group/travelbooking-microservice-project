@@ -45,21 +45,24 @@ pipeline {
 
        stage('Build & Push Services') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                    container('kaniko') {
-                        sh '''
-                        # Install AWS CLI in Kaniko container
-                        apk add --no-cache curl unzip
-                        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-                        unzip awscliv2.zip
-                        ./aws/install
-                        rm -rf awscliv2.zip aws
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
         
-                        echo "===== Configuring Amazon ECR Authentication ====="
-                        mkdir -p /kaniko/.docker
+                    container('awscli') {
+                        sh '''
+                        echo "===== Logging into Amazon ECR ====="
+        
+                        mkdir -p /home/jenkins/.docker
+        
                         PASSWORD=$(aws ecr get-login-password --region ${AWS_DEFAULT_REGION})
+        
                         AUTH=$(printf "AWS:%s" "$PASSWORD" | base64 | tr -d '\n')
-                        cat > /kaniko/.docker/config.json <<EOF
+        
+                        cat > /home/jenkins/.docker/config.json <<EOF
         {
           "auths": {
             "${ECR_REGISTRY}": {
@@ -68,10 +71,23 @@ pipeline {
           }
         }
         EOF
-                        echo "Successfully authenticated to Amazon ECR"
+        
+                        echo "ECR authentication configured successfully."
+                        '''
+                    }
+        
+                    container('kaniko') {
+        
+                        sh '''
+                        mkdir -p /kaniko/.docker
+                        cp /home/jenkins/.docker/config.json /kaniko/.docker/config.json
+        
+                        echo "Docker config copied to Kaniko"
+                        cat /kaniko/.docker/config.json
                         '''
         
                         script {
+        
                             def services = [
                                 'frontend',
                                 'user-service',
@@ -80,9 +96,12 @@ pipeline {
                                 'payment-service',
                                 'notification-service'
                             ]
+        
                             for (service in services) {
+        
                                 sh """
                                 echo "===== Building ${service} ====="
+        
                                 /kaniko/executor \
                                   --context ./${service} \
                                   --dockerfile ./${service}/Dockerfile \
@@ -90,8 +109,10 @@ pipeline {
                                   --destination ${ECR_REGISTRY}/${service}:latest \
                                   --cache=true \
                                   --cache-repo=${ECR_REGISTRY}/kaniko-cache
-                                echo "${service} image built and pushed successfully"
+        
+                                echo "${service} completed."
                                 """
+        
                             }
                         }
                     }
