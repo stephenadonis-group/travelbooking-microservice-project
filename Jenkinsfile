@@ -43,40 +43,47 @@ pipeline {
             }
         }
 
-        stage('Build & Push Services') {
+       stage('Build & Push Services') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                    container('awscli') {
+                    container('kaniko') {
                         sh '''
-                        # Install and start Docker daemon
-                        yum install -y docker
-                        # Start Docker daemon in background
-                        nohup dockerd > /var/log/dockerd.log 2>&1 &
-        
-                        # Wait for Docker daemon to be ready
-                        echo "Waiting for Docker daemon to start..."
-                        for i in {1..30}; do
-                            if docker info > /dev/null 2>&1; then
-                                echo "Docker daemon is ready!"
-                                break
-                            fi
-                            sleep 2
-                        done
-                        # Login to ECR
-                        aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-                        echo "Successfully logged into Amazon ECR"
+                        echo "===== Configuring Amazon ECR Authentication ====="
+                        mkdir -p /kaniko/.docker
+                        PASSWORD=$(aws ecr get-login-password --region ${AWS_DEFAULT_REGION})
+                        AUTH=$(printf "AWS:%s" "$PASSWORD" | base64 | tr -d '\n')
+                        cat > /kaniko/.docker/config.json <<EOF
+        {
+          "auths": {
+            "${ECR_REGISTRY}": {
+              "auth": "${AUTH}"
+            }
+          }
+        }
+        EOF
+                        echo "Successfully authenticated to Amazon ECR"
                         '''
+        
                         script {
-                            def services = ['frontend', 'user-service', 'search-service', 'booking-service', 'payment-service', 'notification-service']
+                            def services = [
+                                'frontend',
+                                'user-service',
+                                'search-service',
+                                'booking-service',
+                                'payment-service',
+                                'notification-service'
+                            ]
                             for (service in services) {
                                 sh """
                                 echo "===== Building ${service} ====="
-                                docker build -t ${ECR_REGISTRY}/${service}:${IMAGE_TAG} ./${service}
-                                docker tag ${ECR_REGISTRY}/${service}:${IMAGE_TAG} ${ECR_REGISTRY}/${service}:latest
-                                docker push ${ECR_REGISTRY}/${service}:${IMAGE_TAG}
-                                docker push ${ECR_REGISTRY}/${service}:latest
-                                docker rmi ${ECR_REGISTRY}/${service}:${IMAGE_TAG} || true
-                                echo "${service} image pushed successfully"
+                                /kaniko/executor \
+                                  --context ./${service} \
+                                  --dockerfile ./${service}/Dockerfile \
+                                  --destination ${ECR_REGISTRY}/${service}:${IMAGE_TAG} \
+                                  --destination ${ECR_REGISTRY}/${service}:latest \
+                                  --cache=true \
+                                  --cache-repo=${ECR_REGISTRY}/kaniko-cache
+                                echo "${service} image built and pushed successfully"
                                 """
                             }
                         }
