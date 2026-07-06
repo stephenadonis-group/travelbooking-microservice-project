@@ -50,8 +50,18 @@ pipeline {
                         sh '''
                         # Install and start Docker daemon
                         yum install -y docker
-                        dockerd > /var/log/dockerd.log 2>&1 & 
-                        sleep 5  # Wait for Docker daemon to start
+                        # Start Docker daemon in background
+                        nohup dockerd > /var/log/dockerd.log 2>&1 &
+        
+                        # Wait for Docker daemon to be ready
+                        echo "Waiting for Docker daemon to start..."
+                        for i in {1..30}; do
+                            if docker info > /dev/null 2>&1; then
+                                echo "Docker daemon is ready!"
+                                break
+                            fi
+                            sleep 2
+                        done
                         # Login to ECR
                         aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
                         echo "Successfully logged into Amazon ECR"
