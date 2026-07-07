@@ -43,7 +43,7 @@ pipeline {
             }
         }
 
-       stage('Build & Push Services') {
+        stage('Build & Push Services') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -54,36 +54,38 @@ pipeline {
         
                     container('awscli') {
                         sh '''
-                        echo "===== Logging into Amazon ECR ====="
+                        echo "===== Configuring Amazon ECR Authentication ====="
         
                         mkdir -p /home/jenkins/.docker
         
                         PASSWORD=$(aws ecr get-login-password --region ${AWS_DEFAULT_REGION})
-        
                         AUTH=$(printf "AWS:%s" "$PASSWORD" | base64 | tr -d '\n')
         
-                        cat > /home/jenkins/.docker/config.json <<EOF
-        {
+                        printf '{
           "auths": {
-            "${ECR_REGISTRY}": {
-              "auth": "${AUTH}"
+            "%s": {
+              "auth": "%s"
             }
           }
-        }
-        EOF
+        }\n' "${ECR_REGISTRY}" "${AUTH}" > /home/jenkins/.docker/config.json
         
-                        echo "ECR authentication configured successfully."
+                        echo "Amazon ECR authentication configured successfully."
                         '''
                     }
         
                     container('kaniko') {
-        
                         sh '''
+                        echo "===== Preparing Kaniko ====="
+        
                         mkdir -p /kaniko/.docker
                         cp /home/jenkins/.docker/config.json /kaniko/.docker/config.json
         
-                        echo "Docker config copied to Kaniko"
-                        cat /kaniko/.docker/config.json
+                        if [ -f /kaniko/.docker/config.json ]; then
+                            echo "Docker configuration copied successfully."
+                        else
+                            echo "Failed to copy Docker configuration."
+                            exit 1
+                        fi
                         '''
         
                         script {
@@ -110,7 +112,7 @@ pipeline {
                                   --cache=true \
                                   --cache-repo=${ECR_REGISTRY}/kaniko-cache
         
-                                echo "${service} completed."
+                                echo "${service} image built and pushed successfully."
                                 """
         
                             }
@@ -118,7 +120,7 @@ pipeline {
                     }
                 }
             }
-        }
+        }    
         // ─────────────────────────────────────────────────────────────────────
         // STAGE: Trivy Security Scan
         // ─────────────────────────────────────────────────────────────────────
