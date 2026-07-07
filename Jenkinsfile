@@ -127,12 +127,14 @@ pipeline {
                 container('docker') {
                     script {
                         def services = ['user-service', 'search-service', 'booking-service', 'payment-service', 'notification-service', 'frontend']
+                        
                         // Install Trivy
                         sh '''
                         apk add --no-cache curl tar
                         curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
                         trivy --version
                         '''
+        
                         // Scan each image
                         for (svc in services) {
                             def scanStatus = sh(
