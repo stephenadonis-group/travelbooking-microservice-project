@@ -98,7 +98,14 @@ controller:
                             env:
                               - name: AWS_DEFAULT_REGION
                                 value: "us-east-1"
-
+                                
+                          - name: "trivy"
+                            image: "aquasec/trivy:latest"
+                            imagePullPolicy: "IfNotPresent"
+                            command: ["cat"]
+                            tty: true
+                            workingDir: "/home/jenkins"
+                            
                         volumes:
                           - name: docker-storage
                             emptyDir: {}
