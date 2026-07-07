@@ -65,13 +65,22 @@ controller:
                           - name: "docker"
                             image: "docker:24-dind"
                             imagePullPolicy: "IfNotPresent"
-                            command: ["cat"]
                             tty: true
                             securityContext:
                               privileged: true
+                            command:
+                              - sh
+                              - -c
+                              - |
+                                dockerd-entrypoint.sh &
+                                while ! docker info >/dev/null 2>&1; do
+                                  echo "Waiting for Docker daemon..."
+                                  sleep 2
+                                done
+                                cat
                             volumeMounts:
-                              - name: docker-sock
-                                mountPath: /var/run/docker.sock
+                              - name: docker-storage
+                                mountPath: /var/lib/docker
 
                           - name: "helm"
                             image: "alpine/helm:3.15"
@@ -91,9 +100,8 @@ controller:
                                 value: "us-east-1"
 
                         volumes:
-                          - name: docker-sock
-                            hostPath:
-                              path: /var/run/docker.sock
+                          - name: docker-storage
+                            emptyDir: {}
 
   installPlugins:
     - kubernetes:latest
