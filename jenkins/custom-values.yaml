@@ -35,6 +35,7 @@ controller:
                       apiVersion: v1
                       kind: Pod
                       spec:
+                        serviceAccountName: cd-jenkins
                         containers:
                           - name: "jnlp"
                             image: "jenkins/inbound-agent:latest"
