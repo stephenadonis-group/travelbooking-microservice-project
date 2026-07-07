@@ -209,14 +209,20 @@ pipeline {
         stage('Update Helm Values') {
             steps {
                 container('helm') {
-                    sh """
+                    sh '''
                     echo "===== Updating Helm values.yaml ====="
-                    for service in frontend user-service search-service booking-service payment-service notification-service; do
-                        sed -i "s|image: .*${service}:.*|image: ${ECR_REGISTRY}/${service}:${IMAGE_TAG}|g" ${HELM_CHART_PATH}/values.yaml
-                    done
-                    echo "Helm values updated successfully"
+        
+                    sed -i "s|image: .*frontend:.*|image: ${ECR_REGISTRY}/frontend:${IMAGE_TAG}|g" ${HELM_CHART_PATH}/values.yaml
+                    sed -i "s|image: .*user-service:.*|image: ${ECR_REGISTRY}/user-service:${IMAGE_TAG}|g" ${HELM_CHART_PATH}/values.yaml
+                    sed -i "s|image: .*search-service:.*|image: ${ECR_REGISTRY}/search-service:${IMAGE_TAG}|g" ${HELM_CHART_PATH}/values.yaml
+                    sed -i "s|image: .*booking-service:.*|image: ${ECR_REGISTRY}/booking-service:${IMAGE_TAG}|g" ${HELM_CHART_PATH}/values.yaml
+                    sed -i "s|image: .*payment-service:.*|image: ${ECR_REGISTRY}/payment-service:${IMAGE_TAG}|g" ${HELM_CHART_PATH}/values.yaml
+                    sed -i "s|image: .*notification-service:.*|image: ${ECR_REGISTRY}/notification-service:${IMAGE_TAG}|g" ${HELM_CHART_PATH}/values.yaml
+        
+                    echo "===== Updated Images ====="
+        
                     grep "image:" ${HELM_CHART_PATH}/values.yaml
-                    """
+                    '''
                 }
             }
         }
