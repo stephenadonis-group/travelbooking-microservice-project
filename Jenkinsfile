@@ -126,31 +126,82 @@ pipeline {
         // ─────────────────────────────────────────────────────────────────────
         stage('Trivy Security Scan') {
             steps {
-                container('docker') {
-                    script {
-                        def services = ['user-service', 'search-service', 'booking-service', 'payment-service', 'notification-service', 'frontend']
-                        
-                        // Install Trivy
-                        sh '''
-                        apk add --no-cache curl tar
-                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-                        trivy --version
-                        '''
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
         
-                        // Scan each image
-                        for (svc in services) {
-                            def scanStatus = sh(
-                                script: """
-                                echo "===== Scanning ${svc} ====="
-                                trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress ${ECR_REGISTRY}/${svc}:latest
-                                """,
-                                returnStatus: true
-                            )
-                            if (scanStatus != 0) {
-                                echo "WARNING: Trivy scan for ${svc} found issues, but pipeline will continue."
+                    container('trivy') {
+        
+                        script {
+        
+                            sh '''
+                            echo "===== Checking AWS CLI ====="
+        
+                            if ! command -v aws >/dev/null 2>&1; then
+                                echo "AWS CLI not found. Installing..."
+        
+                                apk add --no-cache curl unzip bash
+        
+                                curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+        
+                                unzip -q awscliv2.zip
+        
+                                ./aws/install
+        
+                                rm -rf aws awscliv2.zip
+                            else
+                                echo "AWS CLI already installed."
+                            fi
+        
+                            aws --version
+        
+                            echo "===== AWS CLI Ready ====="
+        
+                            echo "===== Logging into Amazon ECR ====="
+        
+                            trivy registry login \
+                                --username AWS \
+                                --password "$(aws ecr get-login-password --region ${AWS_DEFAULT_REGION})" \
+                                ${ECR_REGISTRY}
+                            '''
+        
+                            def services = [
+                                'frontend',
+                                'user-service',
+                                'search-service',
+                                'booking-service',
+                                'payment-service',
+                                'notification-service'
+                            ]
+        
+                            for (svc in services) {
+        
+                                def status = sh(
+                                    script: """
+                                        echo "===== Scanning ${svc} ====="
+        
+                                        trivy image \
+                                            --severity HIGH,CRITICAL \
+                                            --exit-code 0 \
+                                            --no-progress \
+                                            ${ECR_REGISTRY}/${svc}:latest
+                                    """,
+                                    returnStatus: true
+                                )
+        
+                                if (status != 0) {
+                                    echo "WARNING: Vulnerabilities found in ${svc}"
+                                } else {
+                                    echo "${svc} scan completed successfully."
+                                }
                             }
+        
+                            echo "===== All images scanned successfully ====="
+        
                         }
-                        echo "All images scanned successfully"
                     }
                 }
             }
