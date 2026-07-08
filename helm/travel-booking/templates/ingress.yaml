@@ -6,12 +6,14 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
     alb.ingress.kubernetes.io/group.name: travel-booking
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:896618135199:certificate/d015ab77-e7df-4f19-8dec-c5fe492ab636
-    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+
 spec:
   ingressClassName: alb
+
   rules:
     - host: steveops.site
       http:
@@ -23,17 +25,57 @@ spec:
                 name: frontend-service
                 port:
                   number: 80
-                  
+
+          - path: /api/users
+            pathType: Prefix
+            backend:
+              service:
+                name: user-service-service
+                port:
+                  number: 3001
+
+          - path: /api/search
+            pathType: Prefix
+            backend:
+              service:
+                name: search-service-service
+                port:
+                  number: 3002
+
+          - path: /api/bookings
+            pathType: Prefix
+            backend:
+              service:
+                name: booking-service-service
+                port:
+                  number: 3003
+
+          - path: /api/payments
+            pathType: Prefix
+            backend:
+              service:
+                name: payment-service-service
+                port:
+                  number: 3004
+
+          - path: /api/notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service-service
+                port:
+                  number: 3005
+
     - host: www.steveops.site
-        http:
-          paths:
-            - path: /
-              pathType: Prefix
-              backend:
-                service:
-                  name: frontend-service
-                  port:
-                    number: 80                  
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
 
           - path: /api/users
             pathType: Prefix
