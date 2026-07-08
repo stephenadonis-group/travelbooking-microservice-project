@@ -1,65 +1,126 @@
 # kube-prometheus-stack Helm values
 
-# ─── Prometheus ───────────────────────────────────────────────────────────────
+# ==============================================================================
+# Default Rules
+# ==============================================================================
+defaultRules:
+  create: true
+
+# ==============================================================================
+# Prometheus Operator
+# ==============================================================================
+prometheusOperator:
+  admissionWebhooks:
+    enabled: true
+
+# ==============================================================================
+# Prometheus
+# ==============================================================================
 prometheus:
   service:
-    type: NodePort
+    type: ClusterIP
+
   prometheusSpec:
     retention: 15d
+
+    externalUrl: https://steveops.site/prometheus
+    routePrefix: /prometheus
+
     storageSpec:
       volumeClaimTemplate:
         spec:
-          accessModes: ["ReadWriteOnce"]
+          storageClassName: gp3
+          accessModes:
+            - ReadWriteOnce
           resources:
             requests:
               storage: 50Gi
+
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelector: {}
     serviceMonitorNamespaceSelector: {}
-    ruleSelector: {}
+
     ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+
     resources:
       requests:
         cpu: 200m
         memory: 512Mi
       limits:
-        cpu: 1000m
+        cpu: "1"
         memory: 2Gi
 
-# ─── Grafana ──────────────────────────────────────────────────────────────────
+# ==============================================================================
+# Grafana
+# ==============================================================================
 grafana:
   enabled: true
+
+  adminUser: admin
   adminPassword: "TravelBook@Admin123"
+
+  grafana.ini:
+    server:
+      root_url: https://steveops.site/grafana
+      serve_from_sub_path: true
+
   persistence:
     enabled: true
+    storageClassName: gp3
     size: 10Gi
+
   service:
-    type: NodePort
+    type: ClusterIP
+
   sidecar:
     dashboards:
       enabled: true
       label: grafana_dashboard
       labelValue: "1"
+
     datasources:
       enabled: true
 
-# ─── Alertmanager ─────────────────────────────────────────────────────────────
+# ==============================================================================
+# Alertmanager
+# ==============================================================================
 alertmanager:
   service:
-    type: NodePort
+    type: ClusterIP
+
   alertmanagerSpec:
+    externalUrl: https://steveops.site/alertmanager
+    routePrefix: /alertmanager
+
     storage:
       volumeClaimTemplate:
         spec:
-          accessModes: ["ReadWriteOnce"]
+          storageClassName: gp3
+          accessModes:
+            - ReadWriteOnce
           resources:
             requests:
               storage: 5Gi
 
-# ─── Node Exporter ────────────────────────────────────────────────────────────
+# ==============================================================================
+# Node Exporter
+# ==============================================================================
 nodeExporter:
   enabled: true
 
-# ─── Kube State Metrics ──────────────────────────────────────────────────────
+# ==============================================================================
+# kube-state-metrics
+# ==============================================================================
 kubeStateMetrics:
   enabled: true
+
+# ==============================================================================
+# Kubelet Metrics
+# ==============================================================================
+kubelet:
+  enabled: true
+
+  serviceMonitor:
+    enabled: true
+    cAdvisor: true
