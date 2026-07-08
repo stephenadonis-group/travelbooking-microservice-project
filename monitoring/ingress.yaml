@@ -10,9 +10,12 @@ metadata:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:896618135199:certificate/d015ab77-e7df-4f19-8dec-c5fe492ab636
     alb.ingress.kubernetes.io/ssl-redirect: "443"
+
 spec:
   ingressClassName: alb
+
   rules:
+  # Grafana stays under the main domain
   - host: steveops.site
     http:
       paths:
@@ -24,7 +27,11 @@ spec:
             port:
               number: 80
 
-      - path: /prometheus
+  # Prometheus gets its own subdomain
+  - host: prometheus.steveops.site
+    http:
+      paths:
+      - path: /
         pathType: Prefix
         backend:
           service:
@@ -32,7 +39,11 @@ spec:
             port:
               number: 9090
 
-      - path: /alertmanager
+  # Alertmanager gets its own subdomain
+  - host: alertmanager.steveops.site
+    http:
+      paths:
+      - path: /
         pathType: Prefix
         backend:
           service:
