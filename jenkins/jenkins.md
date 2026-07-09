@@ -1,7 +1,8 @@
 # TravelBooking — Jenkins CI/CD Setup Guide
 
-This guide explains how to install Jenkins on GKE using Helm and set up the CI/CD pipeline for the TravelBooking application.
+This guide explains how to install Jenkins on Amazon EKS using Helm and configure a production-ready CI/CD pipeline for the TravelBooking microservices application.
 
+Jenkins runs inside the EKS cluster and uses dynamic Kubernetes agents to build, scan, package, and deploy the application to Amazon EKS.
 ---
 
 ## What is Jenkins?
@@ -30,12 +31,12 @@ Jenkins is an **open-source automation server** used for CI/CD (Continuous Integ
 │     └── npm install on frontend                                      │
 │                                                                      │
 │  Stage 3: Build, Tag & Push Docker Images (6 separate stages)        │
-│     ├── user-service      → Artifact Registry                        │
-│     ├── search-service    → Artifact Registry                        │
-│     ├── booking-service   → Artifact Registry                        │
-│     ├── payment-service   → Artifact Registry                        │
-│     ├── notification-service → Artifact Registry                     │
-│     └── frontend          → Artifact Registry                        │
+│     ├── user-service      → Amazon ECR                               │
+│     ├── search-service    → Amazon ECR                               │
+│     ├── booking-service   → Amazon ECR                               │
+│     ├── payment-service   → Amazon ECR                               │
+│     ├── notification-service → Amazon ECR                            │
+│     └── frontend          → Amazon ECR                               │
 │                                                                      │
 │  Stage 4: Trivy Security Scan                                        │
 │     └── Scan all 6 images for HIGH/CRITICAL vulnerabilities          │
@@ -43,11 +44,8 @@ Jenkins is an **open-source automation server** used for CI/CD (Continuous Integ
 │  Stage 5: Update Helm Values                                         │
 │     └── Update values.yaml with new image tags (1.0.BUILD_NUMBER)    │
 │                                                                      │
-│  Stage 6: Package & Push Helm Chart                                  │
-│     └── Package chart → Push to Artifact Registry (OCI format)       │
-│                                                                      │
-│  Stage 7: Deploy to GKE                                              │
-│     └── Pull chart from AR → helm upgrade --install on GKE           │
+│  Stage 6: Deploy to AWS EKS                                          │
+│     └──  → helm upgrade --install on AWS                             │
 │                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -61,15 +59,18 @@ Before starting, make sure you have:
 1. **GKE cluster running** (created via Terraform or manually)
 2. **kubectl connected** to the cluster
 3. **Helm installed** on your local machine
-4. **Artifact Registry** created (name: `travel-booking`)
-5. **GCP service account JSON key** with these roles:
-   - Artifact Registry Admin
-   - Kubernetes Engine Admin
-   - Storage Admin
+4. **ECR Registry** created (name: `travel-booking`)
+5. IAM User or IAM Role with:
+
+AmazonEC2ContainerRegistryFullAccess
+AmazonEKSClusterPolicy
+AmazonEKSWorkerNodePolicy
+AmazonEKS_CNI_Policy
+AmazonEC2FullAccess (or least privilege equivalent)
 
 ---
 
-## Step 1: Install Jenkins on GKE
+## Step 1: Install Jenkins on EKS
 
 ### 1a. Add Jenkins Helm Repository
 
@@ -159,35 +160,32 @@ kubectl get nodes -o wide | awk '{print $7}' | tail -1
 Access Jenkins at: `http://<NODE_EXTERNAL_IP>:<NODE_PORT>/jenkins`
 
 **Login credentials:**
-- Username: `vijay`
-- Password: `vijay@123`
+- Username: `stephen`
+- Password: `stephen@123`
 
 ---
 
 ## Step 2: Configure Jenkins Credentials
 
-After logging in, you need to add GCP credentials so Jenkins can push images and deploy to GKE.
+After logging in, you need to add AWS credentials so Jenkins can push images and deploy to AWS EKS.
 
 ### 2a. Add GCP Service Account Key
 
 1. Go to **Manage Jenkins** → **Credentials** → **System** → **Global credentials**
 2. Click **Add Credentials**
 3. Fill in:
-   - **Kind:** Secret file
-   - **File:** Upload your `service-account.json` (GCP key file)
-   - **ID:** `gcp-service-account`
-   - **Description:** GCP Service Account for Artifact Registry and GKE
-4. Click **Create**
+   | Credential ID                        | Type                   | What It Contains                              | Used For                                                         |
+| ------------------------------------ | ---------------------- | --------------------------------------------- | ---------------------------------------------------------------- |
+| `aws-credentials`                    | AWS Credentials        | AWS Access Key ID + AWS Secret Access Key     | Authenticate Jenkins with AWS for ECR, EKS, and AWS CLI commands |
+| `github-credentials`                 | Username with Password | GitHub Username + Personal Access Token (PAT) | Clone private GitHub repositories                                |
+| `dockerhub-credentials` *(optional)* | Username with Password | Docker Hub Username + Password/Access Token   | Push or pull Docker images from Docker Hub (if used)             |
 
-### 2b. Add GCP Project ID
+Recommended Global Environment Variables (Manage Jenkins → Configure System → Global properties):
+| Name                   | Value            |
+| ---------------------- | ---------------- |
+| **AWS_DEFAULT_REGION** | `us-east-1`      |
+| **NAMESPACE**          | `travel-booking` |
 
-1. Click **Add Credentials** again
-2. Fill in:
-   - **Kind:** Secret text
-   - **Secret:** `<YOUR_PROJECT_ID>` (your GCP project ID)
-   - **ID:** `gcp-project-id`
-   - **Description:** GCP Project ID
-3. Click **Create**
 
 ### 2c. Add GitHub Credentials (if repository is private)
 
@@ -216,7 +214,7 @@ After logging in, you need to add GCP credentials so Jenkins can push images and
 1. Scroll down to **Pipeline** section
 2. Select **Pipeline script from SCM**
 3. **SCM:** Git
-4. **Repository URL:** `https://github.com/vijaygiduthuri/travelbooking-app.git`
+4. **Repository URL:** `https://github.com/stephenadonis-group/travelbooking-microservice-project.git`
 5. **Branch:** `*/main`
 6. **Script Path:** `Jenkinsfile`
 7. Click **Save**
@@ -239,17 +237,13 @@ After a successful run, verify:
 kubectl get pods -n travel-booking
 
 # Check images in Artifact Registry
-gcloud artifacts docker images list us-central1-docker.pkg.dev/YOUR_PROJECT/travel-booking
+aws ecr describe-repositories
 
-# Check Helm chart in Artifact Registry
-gcloud artifacts docker tags list us-central1-docker.pkg.dev/YOUR_PROJECT/travel-booking/travel-booking
-
-# Check Helm release on GKE
+# Check Helm release on EKS
 helm list -n travel-booking
 
-# Check Gateway IP
-kubectl get gateway -n travel-booking
-```
+# Check AWS ALB Ingress Controller.
+kubectl get ingress -n travel-booking```
 
 ---
 
@@ -262,7 +256,7 @@ kubectl get gateway -n travel-booking
 | `golang` | golang:1.21 | Test Go Services | Compile and vet Go code |
 | `nodejs` | node:20.10.0 | Test Frontend | Install and test Node.js dependencies |
 | `helm` | alpine/helm:3.14.0 | Package Helm | Package Helm charts |
-| `gcloud` | google/cloud-sdk:slim | Push Chart, Deploy | Authenticate with GCP, deploy to GKE |
+| `AWS` |amazon/aws-cli | Push Chart, Deploy | Authenticate with ECR, deploy to AWS |
 | `kaniko` | kaniko-project/executor | (Alternative) | Build images without Docker daemon |
 
 ---
@@ -271,8 +265,8 @@ kubectl get gateway -n travel-booking
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| `admin.username` | vijay | Jenkins admin login |
-| `admin.password` | vijay@123 | Jenkins admin password |
+| `admin.username` | stephen | Jenkins admin login |
+| `admin.password` | stephen@123 | Jenkins admin password |
 | `jenkinsUriPrefix` | /jenkins | Access Jenkins at `/jenkins` path |
 | `serviceType` | NodePort | Exposes Jenkins on a node port |
 | `persistence.size` | 15Gi | Storage for Jenkins data and plugins |
@@ -305,13 +299,7 @@ kubectl get gateway -n travel-booking
 
 ---
 
-## Pipeline Credentials Summary
 
-| Credential ID | Type | What It Contains | Used For |
-|---------------|------|------------------|----------|
-| `gcp-service-account` | Secret file | GCP service account JSON key | Docker login, gcloud auth, GKE access |
-| `gcp-project-id` | Secret text | GCP project ID | Image paths, GKE connection |
-| `github-credentials` | Username/Password | GitHub PAT (if private repo) | Git clone |
 
 ---
 
@@ -341,23 +329,21 @@ kubectl get pod <agent-pod-name> -o yaml | grep privileged
 ### Pipeline can't push to Artifact Registry
 
 Verify credentials:
-1. Check that `gcp-service-account` credential exists in Jenkins
-2. Check that the service account has `Artifact Registry Writer` role
-3. Test manually:
-   ```bash
-   cat service-account.json | docker login -u _json_key --password-stdin https://us-central1-docker.pkg.dev
-   ```
+1 aws sts get-caller-identity
 
-### Pipeline can't connect to GKE
+aws ecr get-login-password \
+| docker login \
+--username AWS \
+--password-stdin <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+
+### Pipeline can't connect to EKS
 
 Verify:
-1. The service account has `Kubernetes Engine Admin` role
-2. The cluster name and zone in the Jenkinsfile match your cluster
-3. Test manually:
-   ```bash
-   gcloud container clusters get-credentials cluster-2 --zone us-central1-a --project YOUR_PROJECT
-   kubectl get nodes
-   ```
+1. aws eks update-kubeconfig \
+  --region us-east-1 \
+  --name travel-booking-cluster
+
+kubectl get nodes
 
 ---
 
@@ -389,117 +375,52 @@ kubectl port-forward svc/jenkins 8080:8080
 
 ---
 
-## Access Jenkins via Domain Name (After DNS Setup)
+## Access Jenkins via AWS Load Balancer ControlleR
 
-> **Prerequisites:** This section should be done **after** the following steps are complete:
-> 1. TravelBooking application is deployed on GKE via Jenkins pipeline
-> 2. Gateway is running and has a static IP (`travel-booking-ip`)
-> 3. DNS is updated on GoDaddy — `<DOMAIN_NAME>` A record points to the Gateway IP
-> 4. Gateway is updated with `hostname: <DOMAIN_NAME>` and `allowedRoutes.namespaces.from: All`
-> 5. You can already access the TravelBooking app at `http://<DOMAIN_NAME>`
-
-Once the above is done, follow these steps to access Jenkins at `http://<DOMAIN_NAME>/jenkins`.
-
-### Why does this work?
-
-The `custom-values.yaml` already configures Jenkins with:
-- `jenkinsUriPrefix: "/jenkins"` — Jenkins serves all pages under `/jenkins`
-- `jenkinsUrl: "http://<DOMAIN_NAME>/jenkins/"` — Jenkins knows its own URL
-
-So Jenkins is already configured for sub-path access. We just need to tell the Gateway to route `/jenkins` traffic to the Jenkins service.
-
-### Step 1: Create Jenkins HealthCheckPolicy
-
-GCP's load balancer needs to health check Jenkins. Jenkins serves its login page at `/jenkins/login`, so we tell GCP to use that as the health check path.
-
-```bash
-kubectl apply -f - <<'EOF'
-apiVersion: networking.gke.io/v1
-kind: HealthCheckPolicy
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
-  name: jenkins-healthcheck
-  namespace: default
+  name: jenkins-ingress
+  namespace: jenkins
+  annotations:
+    alb.ingress.kubernetes.io/group.name: travel-booking
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: <your-acm-certificate-arn>
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
 spec:
-  targetRef:
-    group: ""
-    kind: Service
-    name: jenkins
-  default:
-    checkIntervalSec: 5
-    timeoutSec: 5
-    healthyThreshold: 1
-    unhealthyThreshold: 3
-    config:
-      type: HTTP
-      httpHealthCheck:
-        port: 8080
-        requestPath: /jenkins/login
-EOF
-```
-
-**What this does:**
-- Tells GCP's load balancer to check Jenkins at `/jenkins/login` on port `8080`
-- Without this, GCP probes `/` which returns a 404, and Jenkins shows as "no healthy upstream"
-
-### Step 2: Create Jenkins HTTPRoute
-
-This tells the Gateway to route all `/jenkins` requests to the Jenkins service.
-
-```bash
-kubectl apply -f - <<'EOF'
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: HTTPRoute
-metadata:
-  name: jenkins-httproute
-  namespace: default
-spec:
-  parentRefs:
-  - name: travel-booking-gateway
-    namespace: travel-booking
-  hostnames:
-  - <DOMAIN_NAME>
+  ingressClassName: alb
   rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /jenkins
-    backendRefs:
-    - name: jenkins
-      port: 8080
-EOF
+  - host: steveops.site
+    http:
+      paths:
+      - path: /jenkins
+        pathType: Prefix
+        backend:
+          service:
+            name: jenkins
+            port:
+              number: 8080
+        Then apply it with:
 ```
-
-**What this does:**
-- Routes all requests to `http://<DOMAIN_NAME>/jenkins/*` to the Jenkins service on port 8080
-- The HTTPRoute is in the `default` namespace (same as Jenkins)
-- It references the Gateway in the `travel-booking` namespace — this works because the Gateway has `allowedRoutes.namespaces.from: All`
-
-### Step 3: Verify
-
-Wait 2-5 minutes for GCP load balancer to reprogram, then:
-
-```bash
-# Check HealthCheckPolicy
-kubectl get healthcheckpolicy -n default
-
-# Check HTTPRoute
-kubectl get httproute -n default
-
-# Test Jenkins via domain
-curl -s -o /dev/null -w "Jenkins: HTTP %{http_code}\n" http://<DOMAIN_NAME>/jenkins/login
-# Expected: HTTP 200
+kubectl apply -f jenkins-ingress.yaml
 ```
-
-Open in browser: **`http://<DOMAIN_NAME>/jenkins`**
-
-Login with:
-- **Username:** `vijay`
-- **Password:** `vijay@123`
-
-### Summary
-
-| Access Method | URL | When to Use |
-|---------------|-----|-------------|
-| **NodePort** | `http://<NODE_IP>:<NODEPORT>/jenkins` | Before DNS setup, for quick access |
-| **Port Forward** | `http://localhost:8080/jenkins` | Local access from your machine |
-| **Domain** | `http://<DOMAIN_NAME>/jenkins` | After DNS is configured (recommended) |
+Once the above is done, follow these steps to access Jenkins at `https://<DOMAIN_NAME>/jenkins`.
+Verify:
+```
+kubectl get ingress -n jenkins
+kubectl describe ingress jenkins-ingress -n jenkins
+```
+Test:
+```
+curl -I https://steveops.site/jenkins
+```
+Expected response:
+```
+HTTP/2 302
+```
+or
+```
+HTTP/2 200
+```
