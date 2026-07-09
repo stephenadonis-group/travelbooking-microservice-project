@@ -174,13 +174,15 @@ After logging in, you need to add AWS credentials so Jenkins can push images and
 1. Go to **Manage Jenkins** → **Credentials** → **System** → **Global credentials**
 2. Click **Add Credentials**
 3. Fill in:
+4. 
    | Credential ID                        | Type                   | What It Contains                              | Used For                                                         |
-| ------------------------------------ | ---------------------- | --------------------------------------------- | ---------------------------------------------------------------- |
-| `aws-credentials`                    | AWS Credentials        | AWS Access Key ID + AWS Secret Access Key     | Authenticate Jenkins with AWS for ECR, EKS, and AWS CLI commands |
-| `github-credentials`                 | Username with Password | GitHub Username + Personal Access Token (PAT) | Clone private GitHub repositories                                |
-| `dockerhub-credentials` *(optional)* | Username with Password | Docker Hub Username + Password/Access Token   | Push or pull Docker images from Docker Hub (if used)             |
+   | ------------------------------------ | ---------------------- | --------------------------------------------- | ---------------------------------------------------------------- |
+   | `aws-credentials`                    | AWS Credentials        | AWS Access Key ID + AWS Secret Access Key     | Authenticate Jenkins with AWS for ECR, EKS, and AWS CLI commands |
+   | `github-credentials`                 | Username with Password | GitHub Username + Personal Access Token (PAT) | Clone private GitHub repositories                                |
+   | `dockerhub-credentials` *(optional)* | Username with Password | Docker Hub Username + Password/Access Token   | Push or pull Docker images from Docker Hub (if used)             |
 
 Recommended Global Environment Variables (Manage Jenkins → Configure System → Global properties):
+
 | Name                   | Value            |
 | ---------------------- | ---------------- |
 | **AWS_DEFAULT_REGION** | `us-east-1`      |
