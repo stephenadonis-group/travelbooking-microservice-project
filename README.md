@@ -4,6 +4,7 @@ A cloud-native microservices-based travel booking application, deployed on Elast
 
 ---
 
+
 ## About the Project
 
 TravelBooking is a cloud-native microservices travel application where users can search flights and hotels, make bookings, and process payments — similar to MakeMyTrip or Booking.com. The main focus of this project is to showcase a complete DevOps lifecycle on Amazon Web Services (AWS).
