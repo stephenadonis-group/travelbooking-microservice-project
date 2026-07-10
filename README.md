@@ -24,7 +24,8 @@ TravelBooking is a cloud-native microservices travel application where users can
 
 ## Architecture Overview
 
-```mermaid
+```
+mermaid
 flowchart TB
     subgraph USER["User"]
         BROWSER["Browser"]
