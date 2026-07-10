@@ -57,7 +57,7 @@ The monitoring stack consists of multiple tools working together to collect, sto
 | **Prometheus** | Collects and stores metrics from all services | Central metrics database — stores CPU, memory, request counts, response times |
 | **Grafana** | Displays metrics as dashboards and graphs | Visual monitoring — see what's happening at a glance |
 | **Alertmanager** | Sends notifications when something goes wrong | Get alerted when a pod is down, CPU is high, or errors spike |
-| **Node Exporter** | Collects metrics from GKE nodes (CPU, memory, disk) | Monitor the infrastructure itself, not just the app |
+| **Node Exporter** | Collects metrics from EKS nodes (CPU, memory, disk) | Monitor the infrastructure itself, not just the app |
 | **kube-state-metrics** | Collects Kubernetes object metrics (pods, deployments) | Know how many pods are running, restarting, or failing |
 | **ServiceMonitors** | Tell Prometheus which services to scrape | Automatically discover and scrape our Go services' `/metrics` endpoints |
 
