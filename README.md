@@ -25,130 +25,210 @@ TravelBooking is a cloud-native microservices travel application where users can
 ## Architecture Overview
 
 ```
-mermaid
 flowchart TB
+
+    %% =========================
+    %% User
+    %% =========================
     subgraph USER["User"]
-        BROWSER["Browser"]
+        BROWSER["Web Browser"]
     end
 
-    subgraph DNS["DNS & SSL"]
-        AWS["ROUTE 53 DNS\nA Record"]
-        ACM["Let's Encrypt\nFree SSL"]
+    %% =========================
+    %% DNS
+    %% =========================
+    subgraph DNS["DNS"]
+        ROUTE53["Amazon Route 53<br/>Hosted Zone"]
     end
 
-    subgraph GCP["Google Cloud Platform"]
+    %% =========================
+    %% AWS
+    %% =========================
+    subgraph AWS["Amazon Web Services (AWS)"]
 
-        subgraph TERRAFORM["Infrastructure (Terraform)"]
-            STATICIP["Global Static IP\ntravel-booking-ip"]
-            VPC["VPC\ntravelbooking-vpc\n10.0.0.0/16"]
-            ARTIFACTREGISTRY["ECR Registry\ntravel-booking\nDocker Images\nHelm Charts"]
+        %% Terraform
+        subgraph TERRAFORM["Infrastructure Provisioned with Terraform"]
+
+            VPC["Amazon VPC<br/>10.0.0.0/16"]
+
+            PUBLIC["Public Subnets"]
+
+            PRIVATE["Private Subnets"]
+
+            IGW["Internet Gateway"]
+
+            NAT["NAT Gateway"]
+
+            IAM["IAM Roles"]
+
+            ECR["Amazon ECR<br/>Docker Images<br/>Helm Charts"]
+
         end
 
-        subgraph EKS["EKS Cluster\ne2-standard-2 | Autoscale 2-5 Nodes"]
+        %% Certificate
+        subgraph CERT["SSL/TLS"]
 
-            subgraph GATEWAY["AWS Load Balancer Controller — Application Load Balancer (ALB)"]
-                ALB["Application Load Balancer\nHTTP :80 | HTTPS :443"]
-                ROUTES["HTTPRoutes\n/ | /api/* | /jenkins\n/grafana | /prometheus | /alertmanager"]
+            ACM["AWS Certificate Manager<br/>SSL Certificate"]
+
+        end
+
+        %% EKS
+        subgraph EKS["Amazon EKS Cluster<br/>Managed Node Group (2–5 EC2 Nodes)"]
+
+            %% Load Balancer
+            subgraph LB["AWS Load Balancer Controller"]
+
+                ALB["Application Load Balancer<br/>HTTP :80<br/>HTTPS :443"]
+
+                INGRESS["Ingress Rules<br/>/ <br/>/api/*<br/>/jenkins<br/>/grafana<br/>prometheus.steveops.site<br/>alertmanager.steveops.site"]
+
             end
 
+            %% Application
             subgraph APP["Namespace: travel-booking"]
+
                 direction LR
-                FE["Frontend\nReact.js\nNginx :80"]
-                US["User Service\nGo :3001"]
-                SS["Search Service\nGo :3002"]
-                BS["Booking Service\nGo :3003"]
-                PS["Payment Service\nGo :3004"]
-                NS["Notification\nService\nGo :3005"]
+
+                FE["Frontend<br/>React.js<br/>Nginx :80"]
+
+                US["User Service<br/>Go :3001"]
+
+                SS["Search Service<br/>Go :3002"]
+
+                BS["Booking Service<br/>Go :3003"]
+
+                PS["Payment Service<br/>Go :3004"]
+
+                NS["Notification Service<br/>Go :3005"]
+
             end
 
+            %% Database
             subgraph DATA["Data Layer"]
-                PG["PostgreSQL\nStatefulSet :5432\n5 Databases"]
-                RD["Redis\nCache :6379"]
+
+                PG["PostgreSQL<br/>StatefulSet :5432<br/>5 Databases"]
+
+                REDIS["Redis Cache :6379"]
+
             end
 
-            subgraph JENKINS["Namespace: default"]
-                JK["Jenkins\nCI/CD :8080"]
-                AGENT["Jenkins Agent\nDynamic Pods\ndocker | golang\nnodejs | helm | awscli"]
+            %% Jenkins
+            subgraph JENKINS["Namespace: jenkins"]
+
+                JK["Jenkins Controller"]
+
+                AGENT["Dynamic Jenkins Agents<br/>docker<br/>golang<br/>nodejs<br/>helm<br/>aws-cli"]
+
             end
 
-            subgraph MON["Namespace: monitoring"]
-                PROM["Prometheus\nMetrics :9090"]
-                GRAF["Grafana\nDashboards :3000"]
-                ALERT["Alertmanager\nAlerts :9093"]
-            end
+            %% Monitoring
+            subgraph MONITORING["Namespace: monitoring"]
 
-            subgraph (ACM)["AWS Certificate Manager "]
+                GRAFANA["Grafana<br/>Dashboards"]
+
+                PROM["Prometheus<br/>Metrics"]
+
+                ALERT["Alertmanager<br/>Alerts"]
+
             end
 
         end
     end
 
-    subgraph GITHUB["GitHub (Private Repo)"]
-        REPO["Source Code\nHelm Charts\nJenkinsfile\nTerraform\nDocs"]
+    %% =========================
+    %% GitHub
+    %% =========================
+    subgraph GITHUB["GitHub"]
+
+        REPO["Application Source Code<br/>Terraform<br/>Helm Charts<br/>Jenkinsfile"]
+
     end
 
-   
+    %% =========================
+    %% User Flow
+    %% =========================
 
-    ROUTES -->|"/"| FE
-    ROUTES -->|"/api/users"| US
-    ROUTES -->|"/api/search"| SS
-    ROUTES -->|"/api/bookings"| BS
-    ROUTES -->|"/api/payments"| PS
-    ROUTES -->|"/api/notifications"| NS
-    ROUTES -->|"/jenkins"| JK
-    ROUTES -->|"/grafana"| GRAF
-    ROUTES -->|"/prometheus"| PROM
-    ROUTES -->|"/alertmanager"| ALERT
+    BROWSER -->|"https://steveops.site"| ROUTE53
+
+    ROUTE53 -->|"Alias Record"| ALB
+
+    ACM -->|"HTTPS Certificate"| ALB
+
+    ALB --> INGRESS
+
+    %% =========================
+    %% Ingress Routing
+    %% =========================
+
+    INGRESS -->|"/"| FE
+
+    INGRESS -->|"/api/users"| US
+
+    INGRESS -->|"/api/search"| SS
+
+    INGRESS -->|"/api/bookings"| BS
+
+    INGRESS -->|"/api/payments"| PS
+
+    INGRESS -->|"/api/notifications"| NS
+
+    INGRESS -->|"/jenkins"| JK
+
+    INGRESS -->|"/grafana"| GRAFANA
+
+    INGRESS -->|"prometheus.steveops.site"| PROM
+
+    INGRESS -->|"alertmanager.steveops.site"| ALERT
+
+    %% =========================
+    %% Databases
+    %% =========================
 
     US --> PG
+
     SS --> PG
+
     BS --> PG
+
     PS --> PG
+
     NS --> PG
-    SS --> RD
-    NS --> RD
 
-    PROM -->|"Scrape /metrics"| US
-    PROM -->|"Scrape /metrics"| SS
-    PROM -->|"Scrape /metrics"| BS
-    PROM -->|"Scrape /metrics"| PS
-    PROM -->|"Scrape /metrics"| NS
-    GRAF -->|"Query"| PROM
-    PROM -->|"Fire Alerts"| ALERT
+    SS --> REDIS
 
-    
-    CM -->|"TLS Secret"| ACM
+    NS --> REDIS
+
+    %% =========================
+    %% Monitoring
+    %% =========================
+
+    PROM -->|"Scrapes /metrics"| US
+
+    PROM -->|"Scrapes /metrics"| SS
+
+    PROM -->|"Scrapes /metrics"| BS
+
+    PROM -->|"Scrapes /metrics"| PS
+
+    PROM -->|"Scrapes /metrics"| NS
+
+    GRAFANA -->|"Queries"| PROM
+
+    PROM -->|"Fires Alerts"| ALERT
+
+    %% =========================
+    %% CI/CD
+    %% =========================
 
     REPO -->|"Git Clone"| JK
+
     JK --> AGENT
-    AGENT -->|"Push Images\nPush Charts"| ECR REGISTRY
-    AGENT -->|"helm upgrade"| 
-```
 
----
+    AGENT -->|"Build & Push Images"| ECR
 
-## CI/CD Pipeline Flow (Jenkins)
+    AGENT -->|"Package & Push Helm Chart"| ECR
 
-```mermaid
-flowchart LR
-    subgraph PIPELINE["Jenkins Pipeline — 14 Stages"]
-        direction LR
-        S1["Git\nClone"]
-        S2["Test\nGo Services"]
-        S3["Test\nFrontend"]
-        S4["Docker\nLogin"]
-        S5["Build & Push\n6 Docker Images"]
-        S6["Trivy\nSecurity Scan"]
-        S7["Update\nHelm Values"]
-        S8["Package &\nPush Helm Chart"]
-        S9["Deploy\nto EKS"]
-    end
-
-    GH["GitHub\nPrivate Repo"] --> S1
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9
-    S5 -->|"Images"| ECR["\nRegistry"]
-    
-    S9 -->|"helm upgrade\n--install"| EKS["EKS\nCluster"]
+    AGENT -->|"helm upgrade --install"| EKS
 ```
 
 ---
