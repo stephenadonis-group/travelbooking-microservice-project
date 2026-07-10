@@ -1,24 +1,24 @@
 # TravelBooking — Full-Stack Microservices Travel Booking Platform
 
-A cloud-native microservices-based travel booking application, deployed on Google Kubernetes Engine (GKE) with a complete DevOps lifecycle — Terraform, Helm, Jenkins CI/CD, Prometheus & Grafana monitoring, and HTTPS with Let's Encrypt.
+A cloud-native microservices-based travel booking application, deployed on Elastic Kubernetes Engine (EKS) with a complete DevOps lifecycle — Terraform, Helm, Jenkins CI/CD, Prometheus & Grafana monitoring, Amazon ECR, AWS Load Balancer Controller, ACM & Route53.
 
 ---
 
 ## About the Project
 
-TravelBooking is a cloud-native microservices travel application where users can search flights and hotels, make bookings, and process payments — similar to MakeMyTrip or Booking.com. The main focus of this project is to showcase a complete DevOps lifecycle on Google Cloud Platform.
+TravelBooking is a cloud-native microservices travel application where users can search flights and hotels, make bookings, and process payments — similar to MakeMyTrip or Booking.com. The main focus of this project is to showcase a complete DevOps lifecycle on Amazon Web Services (AWS).
 
 🏗️ **Architecture** — The app is built using **microservices architecture** with 6 services — a React frontend and 5 Go backend services (user, search, booking, payment, notification). Data is stored in PostgreSQL with 5 separate databases (one per service), and Redis is used for caching search results.
 
-☸️ **Kubernetes & Infrastructure** — Everything runs on **Google Kubernetes Engine (GKE)**. The GCP infrastructure (VPC, subnets, firewalls, Artifact Registry, static IP) is created using **Terraform** with state stored in Google Cloud Storage. The application is deployed using a custom **Helm chart** that creates all Kubernetes resources with one command.
+☸️ **Kubernetes & Infrastructure** — Everything runs on **Amazon Elastic Kubernetes Service (Amazon EKS)**. The AWS infrastructure (VPC, subnets, security-groups, ECR Registry, EKS) is created using **Terraform** . The application is deployed using a custom **Helm chart** that creates all Kubernetes resources with one command.
 
-⚙️ **CI/CD with Jenkins** — **Jenkins** runs inside the same GKE cluster and handles CI/CD. The 14-stage pipeline clones code from GitHub, tests services, builds and pushes Docker images to Artifact Registry, scans images with Trivy, packages the Helm chart, and deploys to GKE automatically.
+⚙️ **CI/CD with Jenkins** — **Jenkins** runs inside the same EKS cluster and handles CI/CD. The 14-stage pipeline clones code from GitHub, tests services, builds and pushes Docker images to Artifact Registry, scans images with Trivy, packages the Helm chart, and deploys to GKE automatically.
 
 📊 **Monitoring** — Set up with Prometheus, Grafana, and Alertmanager. Each service exposes metrics that Prometheus scrapes every 15 seconds. Grafana shows 6 custom dashboards, and Alertmanager fires alerts on pod failures, high CPU/memory, or HTTP errors.
 
-🔒 **HTTPS & SSL** — Handled by cert-manager with Let's Encrypt. Free SSL certificates are issued automatically, and the Gateway terminates TLS. All HTTP traffic is permanently redirected to HTTPS, and certificates auto-renew every 60 days.
+🔒 **HTTPS & SSL** — Handled by AWS Certificate Manager (ACM) integrated with the AWS Load Balancer Controller.
 
-🌐 **DNS & Domain Access** — The application is accessible through a custom domain managed via **GoDaddy DNS** pointing to the GKE Gateway's static IP. All components — frontend, APIs, Jenkins, Grafana, Prometheus, Alertmanager — are accessible under the same domain with different URL paths, all secured with HTTPS.
+🌐 **DNS & Domain Access** — The application is accessible through a custom domain managed via Amazon Route53 Alias records pointing to an AWS Application Load Balancer (ALB). with Hostinger domain
 
 ---
 
@@ -31,8 +31,8 @@ flowchart TB
     end
 
     subgraph DNS["DNS & SSL"]
-        GODADDY["GoDaddy DNS\nA Record"]
-        LETSENCRYPT["Let's Encrypt\nFree SSL"]
+        AWS["ROUTE 53 DNS\nA Record"]
+        ACM["Let's Encrypt\nFree SSL"]
     end
 
     subgraph GCP["Google Cloud Platform"]
@@ -40,14 +40,13 @@ flowchart TB
         subgraph TERRAFORM["Infrastructure (Terraform)"]
             STATICIP["Global Static IP\ntravel-booking-ip"]
             VPC["VPC\ntravelbooking-vpc\n10.0.0.0/16"]
-            FIREWALL["Firewall Rules\nSSH | HTTP | HTTPS\nInternal | Health Checks"]
-            ARTIFACTREGISTRY["Artifact Registry\ntravel-booking\nDocker Images\nHelm Charts"]
+            ARTIFACTREGISTRY["ECR Registry\ntravel-booking\nDocker Images\nHelm Charts"]
         end
 
-        subgraph GKE["GKE Cluster\ne2-standard-2 | Autoscale 2-5 Nodes"]
+        subgraph EKS["EKS Cluster\ne2-standard-2 | Autoscale 2-5 Nodes"]
 
-            subgraph GATEWAY["Gateway API — Load Balancer"]
-                GW["Gateway\nHTTP :80 | HTTPS :443"]
+            subgraph GATEWAY["AWS Load Balancer Controller — Application Load Balancer (ALB)"]
+                ALB["Application Load Balancer\nHTTP :80 | HTTPS :443"]
                 ROUTES["HTTPRoutes\n/ | /api/* | /jenkins\n/grafana | /prometheus | /alertmanager"]
             end
 
@@ -68,7 +67,7 @@ flowchart TB
 
             subgraph JENKINS["Namespace: default"]
                 JK["Jenkins\nCI/CD :8080"]
-                AGENT["Jenkins Agent\nDynamic Pods\ndocker | golang\nnodejs | helm | gcloud"]
+                AGENT["Jenkins Agent\nDynamic Pods\ndocker | golang\nnodejs | helm | awscli"]
             end
 
             subgraph MON["Namespace: monitoring"]
@@ -77,8 +76,7 @@ flowchart TB
                 ALERT["Alertmanager\nAlerts :9093"]
             end
 
-            subgraph CERTMGR["Namespace: cert-manager"]
-                CM["cert-manager\nAuto TLS Renewal"]
+            subgraph (ACM)["AWS Certificate Manager "]
             end
 
         end
@@ -88,10 +86,7 @@ flowchart TB
         REPO["Source Code\nHelm Charts\nJenkinsfile\nTerraform\nDocs"]
     end
 
-    BROWSER -->|"https://domain.com"| GODADDY
-    GODADDY -->|"A Record"| STATICIP
-    STATICIP --> GW
-    GW --> ROUTES
+   
 
     ROUTES -->|"/"| FE
     ROUTES -->|"/api/users"| US
@@ -120,13 +115,13 @@ flowchart TB
     GRAF -->|"Query"| PROM
     PROM -->|"Fire Alerts"| ALERT
 
-    CM -->|"HTTP01 Challenge"| LETSENCRYPT
-    CM -->|"TLS Secret"| GW
+    
+    CM -->|"TLS Secret"| ACM
 
     REPO -->|"Git Clone"| JK
     JK --> AGENT
-    AGENT -->|"Push Images\nPush Charts"| ARTIFACTREGISTRY
-    AGENT -->|"helm upgrade"| GW
+    AGENT -->|"Push Images\nPush Charts"| ECR REGISTRY
+    AGENT -->|"helm upgrade"| 
 ```
 
 ---
@@ -145,14 +140,14 @@ flowchart LR
         S6["Trivy\nSecurity Scan"]
         S7["Update\nHelm Values"]
         S8["Package &\nPush Helm Chart"]
-        S9["Deploy\nto GKE"]
+        S9["Deploy\nto EKS"]
     end
 
     GH["GitHub\nPrivate Repo"] --> S1
     S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9
-    S5 -->|"Images"| AR["Artifact\nRegistry"]
-    S8 -->|"Chart"| AR
-    S9 -->|"helm upgrade\n--install"| GKE["GKE\nCluster"]
+    S5 -->|"Images"| ECR["\nRegistry"]
+    
+    S9 -->|"helm upgrade\n--install"| EKS["EKS\nCluster"]
 ```
 
 ---
@@ -166,14 +161,14 @@ flowchart LR
 | **Database** | PostgreSQL 15 (5 databases) |
 | **Cache** | Redis 7 |
 | **Container** | Docker (multi-stage builds) |
-| **Orchestration** | Kubernetes (GKE) |
+| **Orchestration** | Kubernetes (EKS) |
 | **Infrastructure** | Terraform (modular) |
 | **Packaging** | Helm Charts |
-| **CI/CD** | Jenkins (on GKE) |
+| **CI/CD** | Jenkins (on EKS) |
 | **Monitoring** | Prometheus, Grafana, Alertmanager |
-| **TLS/SSL** | cert-manager, Let's Encrypt |
-| **DNS** | GoDaddy |
-| **Registry** | Google Artifact Registry |
+| **TLS/SSL** | ACM |
+| **DNS** | Hostinger |
+| **Registry** | ECR Registry |
 | **Version Control** | GitHub (private) |
 
 ---
@@ -203,22 +198,22 @@ flowchart LR
 | ConfigMaps | 6 | Environment variables |
 | Secrets | 5 | DB passwords, JWT secrets |
 | HPAs | 6 | Auto-scaling (1-5 replicas) |
-| Gateway | 1 | GCP Load Balancer |
+| Ingress | 1 | AWS Load Balancer Controller |
 | HTTPRoutes | 6 | URL path routing |
 
 ---
 
-## GCP Infrastructure (Terraform)
+## AWS Infrastructure (Terraform)
 
 | Resource | Name | Purpose |
 |----------|------|---------|
 | VPC | travelbooking-vpc | Network isolation |
 | Subnet | travelbooking-subnet | 10.0.0.0/16 CIDR |
-| Firewall | 4 rules | SSH, HTTP/S, Internal, Health Checks |
-| GKE Cluster | travelbooking-gke | Kubernetes with Gateway API |
+| Security-groups | 4 rules | SSH, HTTP/S, Internal, Health Checks |
+| EKS Cluster | travelbooking-gke | Kubernetes with Gateway API |
 | Node Pool | e2-standard-2 | Autoscale 2-5 nodes |
-| Artifact Registry | travel-booking | Docker images & Helm charts |
-| Static IP | travel-booking-ip | Global IP for Gateway |
+| ECR Registry | travel-booking | Docker images & Helm charts |
+
 
 ---
 
@@ -248,7 +243,7 @@ travelbooking/
 ├── postgres/                  # Database init script (5 databases)
 ├── nginx/                     # Reverse proxy config (local dev)
 ├── helm/travel-booking/       # Helm chart for Kubernetes deployment
-├── gcp-terraform/             # Terraform modules for GCP infrastructure
+├── AWS-terraform1/             # Terraform modules for GCP infrastructure
 ├── jenkins/                   # Jenkins Helm values & setup guide
 ├── monitoring/                # Prometheus, Grafana, alerts, dashboards
 ├── https/                     # cert-manager & Let's Encrypt config
@@ -267,12 +262,12 @@ travelbooking/
 ## Deployment Order
 
 ```
-1. Terraform       → Create VPC, GKE, Artifact Registry, Static IP
+1. Terraform       → Create VPC, EKS, ECR Registry, IAM Roles
 2. Helm Chart      → Deploy TravelBooking app (8 pods)
-3. Jenkins         → Install CI/CD on GKE
+3. Jenkins         → Install CI/CD on EKS
 4. Monitoring      → Prometheus + Grafana + Alertmanager
-5. DNS             → Point domain to Gateway IP (GoDaddy)
-6. HTTPS           → cert-manager + Let's Encrypt + HTTP→HTTPS redirect
+5. DNS             → Route53
+6. HTTPS           → ACM
 ```
 
 ---
@@ -300,6 +295,4 @@ docker compose down
 | [Jenkins Guide](jenkins/jenkins.md) | Jenkins installation & pipeline |
 | [Monitoring Guide](monitoring/monitoring.md) | Prometheus & Grafana setup |
 | [PostgreSQL Guide](docs/postgresql-database-guide.md) | Database queries & access |
-| [Gateway & DNS Guide](docs/gateway-api-dns-guide.md) | Gateway API & domain setup |
-| [HTTPS Guide](docs/https-setup-guide.md) | SSL/TLS with Let's Encrypt |
 | [Docker Compose Guide](docs/docker-compose-local-setup-guide.md) | Local development setup |
