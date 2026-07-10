@@ -211,8 +211,8 @@ flowchart LR
 | VPC | travelbooking-vpc | Network isolation |
 | Subnet | travelbooking-subnet | 10.0.0.0/16 CIDR |
 | Security-groups | 4 rules | SSH, HTTP/S, Internal, Health Checks |
-| EKS Cluster | travelbooking-gke | Kubernetes with Gateway API |
-| Node Pool | e2-standard-2 | Autoscale 2-5 nodes |
+| EKS Cluster | travelbooking-eks | 
+| Node Pool | t2.medium | Autoscale 2-5 nodes |
 | ECR Registry | travel-booking | Docker images & Helm charts |
 
 
