@@ -1,6 +1,6 @@
 # TravelBooking — Monitoring Stack Setup Guide
 
-This guide explains the complete monitoring setup for the TravelBooking application running on GKE using **Prometheus**, **Grafana**, and **Alertmanager**.
+This guide explains the complete monitoring setup for the TravelBooking application running on EKS using **Prometheus**, **Grafana**, and **Alertmanager**.
 
 ---
 
@@ -104,7 +104,7 @@ monitoring/
 ├── monitoring.md                    # This guide
 ├── prometheus-values.yaml           # Custom values for kube-prometheus-stack (alternative)
 ├── grafana-dashboard-configmap.yaml # Pre-built dashboard (alternative)
-│
+│___ingress.yaml
 ├── helm/
 │   ├── INSTALL.txt                  # Quick install commands
 │   └── values.yaml                  # Helm values for kube-prometheus-stack
@@ -134,9 +134,16 @@ monitoring/
 
 Before starting, make sure:
 
-1. **GKE cluster is running** with the TravelBooking app deployed
-2. **kubectl is connected** to the cluster
-3. **Helm is installed** on your local machine
+Before starting, make sure:
+
+1. Amazon EKS cluster is running with the TravelBooking application deployed
+2. kubectl is connected to your EKS cluster
+3. kubectl is connected to your EKS cluster
+4. Helm is installed on your local machine
+5. AWS Load Balancer Controller is installed in the cluster
+6. Amazon EBS CSI Driver is installed (required for persistent volumes)
+7. Your default StorageClass is configured (or standard StorageClass exists)
+
 
 ```bash
 # Verify
@@ -175,38 +182,29 @@ kubectl create namespace monitoring
 
 ```bash
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --values monitoring/helm/values.yaml \
-  --set prometheus.prometheusSpec.resources.requests.cpu=50m \
-  --set prometheus.prometheusSpec.resources.requests.memory=256Mi \
-  --set prometheus.prometheusSpec.storageSpec=null \
-  --set alertmanager.alertmanagerSpec.storage=null \
-  --set grafana.persistence.enabled=false \
-  --set 'grafana.grafana\.ini.server.root_url=http://<DOMAIN_NAME>/grafana' \
-  --set 'grafana.grafana\.ini.server.serve_from_sub_path=true' \
-  --set prometheus.prometheusSpec.externalUrl=http://<DOMAIN_NAME>/prometheus \
-  --set prometheus.prometheusSpec.routePrefix=/prometheus \
-  --set alertmanager.alertmanagerSpec.externalUrl=http://<DOMAIN_NAME>/alertmanager \
-  --set alertmanager.alertmanagerSpec.routePrefix=/alertmanager \
+  -n monitoring \
+  -f monitoring/helm/values.yaml \
   --wait
 ```
+If upgrading later:
+```
+helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  -n monitoring \
+  -f monitoring/helm/values.yaml
+```
 
-**What each `--set` flag does:**
+AWS-specific configuration in values.yaml
+The values.yaml file already configures:
 
-| Flag | Purpose |
-|------|---------|
-| `prometheus...resources.requests.cpu=50m` | Reduces Prometheus CPU request to avoid pod Pending issues on smaller clusters |
-| `prometheus...storageSpec=null` | Disables persistent storage for Prometheus (uses emptyDir instead) |
-| `alertmanager...storage=null` | Disables persistent storage for Alertmanager |
-| `grafana.persistence.enabled=false` | Disables persistent storage for Grafana |
-| `grafana...root_url` | Tells Grafana it is served at `/grafana` sub-path |
-| `grafana...serve_from_sub_path=true` | Makes Grafana serve all assets from `/grafana` prefix |
-| `prometheus...externalUrl` | Tells Prometheus its external URL is at `/prometheus` |
-| `prometheus...routePrefix=/prometheus` | Serves Prometheus UI at `/prometheus` instead of `/` |
-| `alertmanager...externalUrl` | Tells Alertmanager its external URL is at `/alertmanager` |
-| `alertmanager...routePrefix=/alertmanager` | Serves Alertmanager UI at `/alertmanager` instead of `/` |
-
-> **Note:** Replace `<DOMAIN_NAME>` with your actual domain (e.g., `vijaygiduthuri.in`). If you don't have a domain yet, remove the Grafana `root_url`, `serve_from_sub_path`, `externalUrl`, and `routePrefix` flags — you can add them later when setting up domain access.
+| Component        | Configuration                        |
+| ---------------- | ------------------------------------ |
+| Prometheus       | 50Gi Amazon EBS Persistent Volume    |
+| Grafana          | 10Gi Amazon EBS Persistent Volume    |
+| Alertmanager     | 5Gi Amazon EBS Persistent Volume     |
+| StorageClass     | `standard` (Amazon EBS CSI Driver)   |
+| Prometheus URL   | `https://prometheus.steveops.site`   |
+| Grafana URL      | `https://steveops.site/grafana`      |
+| Alertmanager URL | `https://alertmanager.steveops.site` |
 
 **What this does:**
 - `kube-prometheus-stack` is the release name
@@ -296,6 +294,88 @@ kubectl apply -f monitoring/alertrules/ -n monitoring
 
 **Alerts configured:**
 
+## Create Monitoring Ingress
+To expose the monitoring stack externally, create an AWS ALB Ingress that routes traffic to Grafana, Prometheus, and Alertmanager.
+Apply the Ingress:
+```
+kubectl apply -f monitoring/ingress.yaml
+```
+What this does
+1. Creates an AWS Application Load Balancer (ALB) Ingress that exposes the monitoring services.
+2. The monitoring Ingress is configured to use the same ALB as the TravelBooking application by sharing the same Ingress Group.
+This allows a single ALB to serve both the application and the monitoring stack.
+
+Ingress Features
+
+The monitoring Ingress uses:
+
+AWS Load Balancer Controller
+Internet-facing Application Load Balancer
+ACM SSL Certificate
+HTTPS redirect
+IP Target Mode
+Shared ALB Ingress Group (travel-booking
+
+Verify the Ingress
+```
+kubectl get ingress -A
+```
+Expected:
+NAMESPACE        NAME
+travel-booking   travel-booking-ingress
+monitoring       monitoring-ingress
+
+Describe the monitoring ingress:
+```
+kubectl describe ingress monitoring-ingress -n monitoring
+```
+You should see routes similar to:
+```
+Host: steveops.site
+  /grafana
+
+Host: prometheus.steveops.site
+  /
+
+Host: alertmanager.steveops.site
+  /
+```
+Step 7: Configure Route 53
+Create DNS records pointing the monitoring subdomains to the existing AWS Application Load Balancer.
+| Record Type | Name                       | Alias Target      |
+| ----------- | -------------------------- | ----------------- |
+| A (Alias)   | prometheus.steveops.site   | TravelBooking ALB |
+| A (Alias)   | alertmanager.steveops.site | TravelBooking ALB |
+
+Grafana continues to use:
+```
+https://steveops.site/grafana
+```
+No additional Route 53 record is required for Grafana because it is served as a subpath of the main application domain.
+# Verify Monitoring Access
+Wait a few minutes for the ALB and Route 53 changes to propagate.
+Test each endpoint:
+```
+curl -I https://steveops.site/grafana
+
+curl -I https://prometheus.steveops.site
+
+curl -I https://alertmanager.steveops.site
+```
+Expected responses:
+| Endpoint     | Expected Response          |
+| ------------ | -------------------------- |
+| Grafana      | HTTP 302 Redirect to Login |
+| Prometheus   | HTTP 200 OK                |
+| Alertmanager | HTTP 200 OK                |
+
+Monitoring Endpoints
+| Component    | URL                                                                      |
+| ------------ | ------------------------------------------------------------------------ |
+| Grafana      | [https://steveops.site/grafana](https://steveops.site/grafana)           |
+| Prometheus   | [https://prometheus.steveops.site](https://prometheus.steveops.site)     |
+| Alertmanager | [https://alertmanager.steveops.site](https://alertmanager.steveops.site) |
+
 | Alert Name | Condition | Severity | Fires After |
 |------------|-----------|----------|-------------|
 | `PodDown` | Any pod in travel-booking is down | Critical | 1 minute |
@@ -309,6 +389,7 @@ kubectl apply -f monitoring/alertrules/ -n monitoring
 ```bash
 kubectl get prometheusrules -n monitoring
 ```
+
 
 ---
 
@@ -342,62 +423,46 @@ kubectl get configmaps -n monitoring -l grafana_dashboard=1
 
 ---
 
-## Step 8: Create GCP Firewall Rule for NodePorts
 
-All three monitoring services (Grafana, Prometheus, Alertmanager) are exposed as `NodePort` services. To access them from your browser, you need a GCP firewall rule that allows traffic on NodePort range (30000-32767).
 
-```bash
-gcloud compute firewall-rules create allow-monitoring-nodeports \
-  --project YOUR_PROJECT_ID \
-  --allow tcp:30000-32767 \
-  --source-ranges 0.0.0.0/0 \
-  --description "Allow access to monitoring NodePort services" \
-  --network default
+
+
+## Step 8: Access Grafana, Prometheus & Alertmanager
+
+After the monitoring Ingress has been created and the Route 53 records have propagated (this may take a few minutes), verify that the monitoring services are accessible through your domain.
+Verify the Monitoring Ingress
 ```
+kubectl get ingress -A
 
-**What this does:**
-- Opens ports 30000-32767 on all GKE nodes
-- Allows your browser to reach Grafana, Prometheus, and Alertmanager via `http://<NODE_IP>:<NODE_PORT>`
-
-> **Note:** This rule only needs to be created once. It persists until you delete it.
-
----
-
-## Step 9: Access Grafana, Prometheus & Alertmanager
-
-### Get NodePorts and Node IPs
-
-```bash
-# Get NodePort numbers for all monitoring services
-kubectl get svc -n monitoring | grep NodePort
-
-# Get external IPs of GKE nodes
-kubectl get nodes -o wide | awk '{print $1, $7}'
+kubectl describe ingress monitoring-ingress -n monitoring
 ```
+You should see the monitoring ingress associated with the same AWS Application Load Balancer as your TravelBooking application.
 
-### Access URLs
-
-Use **any node's external IP** with the NodePort number:
-
-| Tool | URL | What It Does |
-|------|-----|-------------|
-| **Grafana** | `http://<NODE_IP>:<GRAFANA_NODEPORT>` | Dashboards and visualization |
-| **Prometheus** | `http://<NODE_IP>:<PROMETHEUS_NODEPORT>` | Metrics queries and targets |
-| **Alertmanager** | `http://<NODE_IP>:<ALERTMANAGER_NODEPORT>` | Active alerts and alert history |
-
-**Example** (your NodePorts may differ):
+Test the Endpoints:
+Use curl to verify each endpoint.
 ```
-Grafana:      http://<NODE_IP>:<GRAFANA_NODEPORT>
-Prometheus:   http://<NODE_IP>:<PROMETHEUS_NODEPORT>
-Alertmanager: http://<NODE_IP>:<ALERTMANAGER_NODEPORT>
-```
+curl -I https://steveops.site/grafana
 
-> **Tip:** To find your exact NodePorts, run:
-> ```bash
-> kubectl get svc kube-prometheus-stack-grafana -n monitoring -o jsonpath='{.spec.ports[0].nodePort}'
-> kubectl get svc kube-prometheus-stack-prometheus -n monitoring -o jsonpath='{.spec.ports[0].nodePort}'
-> kubectl get svc kube-prometheus-stack-alertmanager -n monitoring -o jsonpath='{.spec.ports[0].nodePort}'
-> ```
+curl -I https://prometheus.steveops.site
+
+curl -I https://alertmanager.steveops.site
+```
+Expected responses:
+| Endpoint     | Expected Response          |
+| ------------ | -------------------------- |
+| Grafana      | HTTP 302 Redirect to Login |
+| Prometheus   | HTTP 200 OK                |
+| Alertmanager | HTTP 200 OK                |
+
+Access URLs
+
+Open the following URLs in your browser:
+| Tool             | URL                                  | Purpose                              |
+| ---------------- | ------------------------------------ | ------------------------------------ |
+| **Grafana**      | `https://steveops.site/grafana`      | Dashboards and visualization         |
+| **Prometheus**   | `https://prometheus.steveops.site`   | Metrics queries and targets          |
+| **Alertmanager** | `https://alertmanager.steveops.site` | View active alerts and alert history |
+
 
 ### Grafana Login Credentials
 
@@ -420,7 +485,7 @@ Alertmanager: http://<NODE_IP>:<ALERTMANAGER_NODEPORT>
 
 ### Prometheus Queries
 
-Open the Prometheus UI (`http://<NODE_IP>:<PROMETHEUS_NODEPORT>`), paste a query in the **Expression** box, and click the **Execute** button (blue play icon on the left side of the expression box). Results appear in the **Table** tab below.
+Open the Prometheus UI , paste a query in the **Expression** box, and click the **Execute** button (blue play icon on the left side of the expression box). Results appear in the **Table** tab below.
 
 > **Tip:** After pasting the query, you must click the **Execute** button (the `>_` icon). Pressing Enter alone may not work in the new Prometheus UI.
 
@@ -544,91 +609,106 @@ Open the Alertmanager UI to see:
 
 The `monitoring/helm/values.yaml` file configures the entire stack. Here's what each section does:
 
+
 ### Prometheus Settings
 
-| Setting | Value | Why |
-|---------|-------|-----|
-| `service.type` | NodePort | Expose Prometheus externally via NodePort (no LoadBalancer cost) |
-| `retention` | 15d | Keep metrics data for 15 days |
-| `storage` | 50Gi | Storage for metrics data |
-| `serviceMonitorSelectorNilUsesHelmValues: false` | - | Allow Prometheus to pick up ServiceMonitors from ANY namespace |
-| `serviceMonitorSelector: {}` | - | Select ALL ServiceMonitors (no label filtering) |
-| `resources.requests.cpu` | 200m | Minimum CPU for Prometheus |
-| `resources.limits.memory` | 2Gi | Maximum memory for Prometheus |
+| Setting                                   | Value                              | Why                                                                           |
+| ----------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------- |
+| `service.type`                            | `ClusterIP`                        | Exposes Prometheus internally. Traffic is routed through the AWS ALB Ingress. |
+| `retention`                               | `15d`                              | Retains metrics for 15 days.                                                  |
+| `storageClassName`                        | `standard`                         | Uses the Amazon EBS CSI StorageClass for persistent storage.                  |
+| `storage`                                 | `50Gi`                             | Persistent storage for Prometheus metrics.                                    |
+| `externalUrl`                             | `https://prometheus.steveops.site` | Configures Prometheus to use its public URL.                                  |
+| `serviceMonitorSelectorNilUsesHelmValues` | `false`                            | Allows Prometheus to discover ServiceMonitors outside the Helm release.       |
+| `serviceMonitorSelector`                  | `{}`                               | Selects all ServiceMonitors.                                                  |
+| `serviceMonitorNamespaceSelector`         | `{}`                               | Watches ServiceMonitors in all namespaces.                                    |
+| `ruleSelectorNilUsesHelmValues`           | `false`                            | Allows Prometheus to discover custom PrometheusRule resources.                |
+| `ruleSelector`                            | `{}`                               | Selects all PrometheusRule resources.                                         |
+| `resources.requests.cpu`                  | `200m`                             | Minimum CPU reserved for Prometheus.                                          |
+| `resources.limits.memory`                 | `2Gi`                              | Maximum memory allowed for Prometheus.                                        |
+
 
 ### Grafana Settings
 
-| Setting | Value | Why |
-|---------|-------|-----|
-| `adminPassword` | TravelBook@Admin123 | Grafana login password |
-| `persistence.size` | 10Gi | Storage for dashboards and settings |
-| `service.type` | NodePort | Expose Grafana externally via NodePort (no LoadBalancer cost) |
-| `sidecar.dashboards.enabled` | true | Auto-load dashboards from ConfigMaps |
+| Setting                       | Value                           | Why                                                                    |
+| ----------------------------- | ------------------------------- | ---------------------------------------------------------------------- |
+| `adminUser`                   | `admin`                         | Grafana administrator username.                                        |
+| `adminPassword`               | `TravelBook@Admin123`           | Grafana administrator password.                                        |
+| `service.type`                | `ClusterIP`                     | Internal service exposed through the AWS ALB Ingress.                  |
+| `root_url`                    | `https://steveops.site/grafana` | Configures Grafana to operate correctly behind the `/grafana` subpath. |
+| `serve_from_sub_path`         | `true`                          | Enables Grafana to serve assets from `/grafana`.                       |
+| `persistence.enabled`         | `true`                          | Enables persistent storage for dashboards and settings.                |
+| `storageClassName`            | `standard`                      | Uses Amazon EBS CSI volumes.                                           |
+| `persistence.size`            | `10Gi`                          | Persistent storage for Grafana.                                        |
+| `sidecar.dashboards.enabled`  | `true`                          | Automatically imports dashboards from ConfigMaps.                      |
+| `sidecar.datasources.enabled` | `true`                          | Automatically provisions Prometheus as the Grafana datasource.         |
+
 
 ### Alertmanager Settings
 
-| Setting | Value | Why |
-|---------|-------|-----|
-| `service.type` | NodePort | Expose Alertmanager externally via NodePort |
-| `storage` | 5Gi | Storage for alert history |
+| Setting            | Value                                | Why                                                   |
+| ------------------ | ------------------------------------ | ----------------------------------------------------- |
+| `service.type`     | `ClusterIP`                          | Internal service exposed through the AWS ALB Ingress. |
+| `externalUrl`      | `https://alertmanager.steveops.site` | Public URL for Alertmanager.                          |
+| `storageClassName` | `standard`                           | Uses Amazon EBS CSI persistent storage.               |
+| `storage`          | `5Gi`                                | Persistent storage for alert data.                    |
+
 
 ---
 
 ## Complete Installation — All Commands in Order
 
 ```bash
-# ─── Step 1: Add Helm repo ───────────────────────────────────────────────────
+# ─── Step 1: Add Helm Repository ──────────────────────────────────────────────
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
-# ─── Step 2: Create namespace ─────────────────────────────────────────────────
+# ─── Step 2: Create Monitoring Namespace ──────────────────────────────────────
 kubectl create namespace monitoring
 
 # ─── Step 3: Install kube-prometheus-stack ────────────────────────────────────
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
-  --values monitoring/helm/values.yaml \
-  --set prometheus.prometheusSpec.resources.requests.cpu=50m \
-  --set prometheus.prometheusSpec.resources.requests.memory=256Mi \
-  --set prometheus.prometheusSpec.storageSpec=null \
-  --set alertmanager.alertmanagerSpec.storage=null \
-  --set grafana.persistence.enabled=false \
-  --set 'grafana.grafana\.ini.server.root_url=http://<DOMAIN_NAME>/grafana' \
-  --set 'grafana.grafana\.ini.server.serve_from_sub_path=true' \
-  --set prometheus.prometheusSpec.externalUrl=http://<DOMAIN_NAME>/prometheus \
-  --set prometheus.prometheusSpec.routePrefix=/prometheus \
-  --set alertmanager.alertmanagerSpec.externalUrl=http://<DOMAIN_NAME>/alertmanager \
-  --set alertmanager.alertmanagerSpec.routePrefix=/alertmanager \
-  --wait
+  -f monitoring/helm/values.yaml
 
-# ─── Step 4: Verify pods are running ─────────────────────────────────────────
+# ─── Step 4: Verify Installation ──────────────────────────────────────────────
 kubectl get pods -n monitoring
+kubectl get svc -n monitoring
+kubectl get pvc -n monitoring
 
 # ─── Step 5: Apply ServiceMonitors ────────────────────────────────────────────
-kubectl apply -f monitoring/servicemonitors/ -n travel-booking
+kubectl apply -f monitoring/servicemonitors/
 
 # ─── Step 6: Apply Alert Rules ────────────────────────────────────────────────
-kubectl apply -f monitoring/alertrules/ -n monitoring
+kubectl apply -f monitoring/alertrules/
 
-# ─── Step 7: Apply Dashboards ────────────────────────────────────────────────
-kubectl apply -f monitoring/dashboards/ -n monitoring
+# ─── Step 7: Apply Grafana Dashboards ─────────────────────────────────────────
+kubectl apply -f monitoring/dashboards/
 
-# ─── Step 8: Create GCP Firewall Rule (one-time) ─────────────────────────────
-gcloud compute firewall-rules create allow-monitoring-nodeports \
-  --project YOUR_PROJECT_ID \
-  --allow tcp:30000-32767 \
-  --source-ranges 0.0.0.0/0 \
-  --description "Allow access to monitoring NodePort services" \
-  --network default
+# ─── Step 8: Create Monitoring Ingress ────────────────────────────────────────
+kubectl apply -f monitoring/ingress.yaml
 
-# ─── Step 9: Get Access URLs ─────────────────────────────────────────────────
-kubectl get svc -n monitoring | grep NodePort
-kubectl get nodes -o wide | awk '{print $1, $7}'
-# Access Grafana:      http://<NODE_IP>:<GRAFANA_NODEPORT>
-# Access Prometheus:   http://<NODE_IP>:<PROMETHEUS_NODEPORT>
-# Access Alertmanager: http://<NODE_IP>:<ALERTMANAGER_NODEPORT>
-# Grafana Username: admin
-# Grafana Password: TravelBook@Admin123
+# ─── Step 9: Verify the Monitoring Ingress ────────────────────────────────────
+kubectl get ingress -A
+kubectl describe ingress monitoring-ingress -n monitoring
+
+# ─── Step 10: Configure Route 53 ──────────────────────────────────────────────
+# Create the following Alias A records:
+#
+# prometheus.steveops.site   → TravelBooking ALB
+# alertmanager.steveops.site → TravelBooking ALB
+#
+# Grafana remains available at:
+# https://steveops.site/grafana
+
+# ─── Step 11: Verify Access ───────────────────────────────────────────────────
+curl -I https://steveops.site/grafana
+curl -I https://prometheus.steveops.site
+curl -I https://alertmanager.steveops.site
+
+# Grafana Credentials
+# Username: admin
+# Password: TravelBook@Admin123
 ```
 
 ---
@@ -657,19 +737,15 @@ After changing `monitoring/helm/values.yaml`:
 ```bash
 helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
-  --values monitoring/helm/values.yaml \
-  --set prometheus.prometheusSpec.resources.requests.cpu=50m \
-  --set prometheus.prometheusSpec.resources.requests.memory=256Mi \
-  --set prometheus.prometheusSpec.storageSpec=null \
-  --set alertmanager.alertmanagerSpec.storage=null \
-  --set grafana.persistence.enabled=false \
-  --set 'grafana.grafana\.ini.server.root_url=http://<DOMAIN_NAME>/grafana' \
-  --set 'grafana.grafana\.ini.server.serve_from_sub_path=true' \
-  --set prometheus.prometheusSpec.externalUrl=http://<DOMAIN_NAME>/prometheus \
-  --set prometheus.prometheusSpec.routePrefix=/prometheus \
-  --set alertmanager.alertmanagerSpec.externalUrl=http://<DOMAIN_NAME>/alertmanager \
-  --set alertmanager.alertmanagerSpec.routePrefix=/alertmanager \
-  --wait
+  -f monitoring/helm/values.yaml
+```
+Wait for the rollout to complete:
+```
+kubectl rollout status statefulset/prometheus-kube-prometheus-stack-prometheus -n monitoring
+
+kubectl rollout status statefulset/alertmanager-kube-prometheus-stack-alertmanager -n monitoring
+
+kubectl rollout status deployment/kube-prometheus-stack-grafana -n monitoring
 ```
 
 ---
@@ -728,224 +804,95 @@ kubectl get storageclass
 
 ## Quick Reference
 
-### Access via NodePort (External — No LoadBalancer Cost)
+### Access via AWS Application Load Balancer (Recommended)
 
-```bash
-# Get NodePorts
-kubectl get svc -n monitoring | grep NodePort
+The monitoring services are exposed through the same AWS Application Load Balancer (ALB) that serves the TravelBooking application.
+Public URLs:
 
-# Get Node External IPs
-kubectl get nodes -o wide | awk '{print $1, $7}'
+| Tool             | URL                                  |
+| ---------------- | ------------------------------------ |
+| **Grafana**      | `https://steveops.site/grafana`      |
+| **Prometheus**   | `https://prometheus.steveops.site`   |
+| **Alertmanager** | `https://alertmanager.steveops.site` |
 
-# Access: http://<ANY_NODE_IP>:<NODEPORT>
+
+Verify the Monitoring Ingress
+```
+kubectl get ingress -A
+
+kubectl describe ingress monitoring-ingress -n monitoring
+```
+expected output:
+
+* Monitoring Ingress is Ready
+* Uses the same AWS ALB as the TravelBooking application
+* SSL certificate attached through AWS Certificate Manager (ACM)
+* 
+Verify Route 53 DNS
+Verify that the monitoring subdomains resolve to your Application Load Balancer.
+```
+nslookup prometheus.steveops.site
+
+nslookup alertmanager.steveops.site
+```
+Verify the Endpoints
+```
+curl -I https://steveops.site/grafana
+
+curl -I https://prometheus.steveops.site
+
+curl -I https://alertmanager.steveops.site
 ```
 
-| Tool | Service Name | Default Port | How to Get NodePort |
-|------|-------------|-------------|---------------------|
-| **Grafana** | `kube-prometheus-stack-grafana` | 80 | `kubectl get svc kube-prometheus-stack-grafana -n monitoring -o jsonpath='{.spec.ports[0].nodePort}'` |
-| **Prometheus** | `kube-prometheus-stack-prometheus` | 9090 | `kubectl get svc kube-prometheus-stack-prometheus -n monitoring -o jsonpath='{.spec.ports[0].nodePort}'` |
-| **Alertmanager** | `kube-prometheus-stack-alertmanager` | 9093 | `kubectl get svc kube-prometheus-stack-alertmanager -n monitoring -o jsonpath='{.spec.ports[0].nodePort}'` |
+| Endpoint     | Expected Response |
+| ------------ | ----------------- |
+| Grafana      | HTTP 302 Redirect |
+| Prometheus   | HTTP 200 OK       |
+| Alertmanager | HTTP 200 OK       |
 
-### Access via Port Forward (Alternative — Local Only)
-
-```bash
-kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring       # http://localhost:3000
-kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring   # http://localhost:9090
-kubectl port-forward svc/kube-prometheus-stack-alertmanager 9093:9093 -n monitoring # http://localhost:9093
-```
-
-### Access via Domain Name (Recommended)
-
-After DNS is configured and the TravelBooking Gateway is running, you can access Grafana, Prometheus, and Alertmanager via your domain name instead of NodePort.
-
-| Tool | URL |
-|------|-----|
-| **Grafana** | `http://<DOMAIN_NAME>/grafana` |
-| **Prometheus** | `http://<DOMAIN_NAME>/prometheus` |
-| **Alertmanager** | `http://<DOMAIN_NAME>/alertmanager` |
-
-To set this up, run the following steps after the monitoring stack is installed:
-
-#### Step 1: Configure sub-paths on monitoring services
-
-Upgrade the Helm release to tell Grafana, Prometheus, and Alertmanager to serve from sub-paths:
-
-```bash
-helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --values monitoring/helm/values.yaml \
-  --set 'grafana.grafana\.ini.server.root_url=http://<DOMAIN_NAME>/grafana' \
-  --set 'grafana.grafana\.ini.server.serve_from_sub_path=true' \
-  --set prometheus.prometheusSpec.externalUrl=http://<DOMAIN_NAME>/prometheus \
-  --set prometheus.prometheusSpec.routePrefix=/prometheus \
-  --set alertmanager.alertmanagerSpec.externalUrl=http://<DOMAIN_NAME>/alertmanager \
-  --set alertmanager.alertmanagerSpec.routePrefix=/alertmanager \
-  --wait
-```
-
-**What this does:**
-- **Grafana:** Serves the UI at `/grafana` instead of `/`. All CSS, JS, and API calls use the `/grafana` prefix
-- **Prometheus:** Serves the UI at `/prometheus`. The query page becomes `/prometheus/query`
-- **Alertmanager:** Serves the UI at `/alertmanager`. The alerts page becomes `/alertmanager/#/alerts`
-
-#### Step 2: Create HealthCheckPolicies
-
-GCP's load balancer needs to know how to health check these services. Without this, GCP will probe `/` and get a 404, marking the service as unhealthy.
-
-```bash
-kubectl apply -f - <<'EOF'
----
-apiVersion: networking.gke.io/v1
-kind: HealthCheckPolicy
-metadata:
-  name: grafana-healthcheck
-  namespace: monitoring
-spec:
-  targetRef:
-    group: ""
-    kind: Service
-    name: kube-prometheus-stack-grafana
-  default:
-    checkIntervalSec: 10
-    timeoutSec: 5
-    healthyThreshold: 1
-    unhealthyThreshold: 3
-    config:
-      type: HTTP
-      httpHealthCheck:
-        port: 3000
-        requestPath: /api/health
----
-apiVersion: networking.gke.io/v1
-kind: HealthCheckPolicy
-metadata:
-  name: prometheus-healthcheck
-  namespace: monitoring
-spec:
-  targetRef:
-    group: ""
-    kind: Service
-    name: kube-prometheus-stack-prometheus
-  default:
-    checkIntervalSec: 10
-    timeoutSec: 5
-    healthyThreshold: 1
-    unhealthyThreshold: 3
-    config:
-      type: HTTP
-      httpHealthCheck:
-        port: 9090
-        requestPath: /prometheus/-/healthy
----
-apiVersion: networking.gke.io/v1
-kind: HealthCheckPolicy
-metadata:
-  name: alertmanager-healthcheck
-  namespace: monitoring
-spec:
-  targetRef:
-    group: ""
-    kind: Service
-    name: kube-prometheus-stack-alertmanager
-  default:
-    checkIntervalSec: 10
-    timeoutSec: 5
-    healthyThreshold: 1
-    unhealthyThreshold: 3
-    config:
-      type: HTTP
-      httpHealthCheck:
-        port: 9093
-        requestPath: /alertmanager/-/healthy
-EOF
-```
-
-#### Step 3: Create HTTPRoutes
-
-These routes tell the Gateway to forward `/grafana`, `/prometheus`, and `/alertmanager` traffic to the monitoring services.
-
-> **Note:** The Gateway must have `allowedRoutes.namespaces.from: All` set so it accepts routes from the `monitoring` namespace. This was already configured in the gateway-api-dns-guide.
-
-```bash
-kubectl apply -f - <<'EOF'
----
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: HTTPRoute
-metadata:
-  name: grafana-route
-  namespace: monitoring
-spec:
-  parentRefs:
-  - name: travel-booking-gateway
-    namespace: travel-booking
-  hostnames:
-  - vijaygiduthuri.in
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /grafana
-    backendRefs:
-    - name: kube-prometheus-stack-grafana
-      port: 80
----
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: HTTPRoute
-metadata:
-  name: prometheus-route
-  namespace: monitoring
-spec:
-  parentRefs:
-  - name: travel-booking-gateway
-    namespace: travel-booking
-  hostnames:
-  - vijaygiduthuri.in
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /prometheus
-    backendRefs:
-    - name: kube-prometheus-stack-prometheus
-      port: 9090
----
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: HTTPRoute
-metadata:
-  name: alertmanager-route
-  namespace: monitoring
-spec:
-  parentRefs:
-  - name: travel-booking-gateway
-    namespace: travel-booking
-  hostnames:
-  - vijaygiduthuri.in
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /alertmanager
-    backendRefs:
-    - name: kube-prometheus-stack-alertmanager
-      port: 9093
-EOF
-```
-
-#### Step 4: Verify domain access
-
-Wait 2-5 minutes for the GCP load balancer to reprogram, then test:
-
-```bash
-curl -s -o /dev/null -w "Grafana: HTTP %{http_code}\n" http://<DOMAIN_NAME>/grafana/
-curl -s -o /dev/null -w "Prometheus: HTTP %{http_code}\n" http://<DOMAIN_NAME>/prometheus/
-curl -s -o /dev/null -w "Alertmanager: HTTP %{http_code}\n" http://<DOMAIN_NAME>/alertmanager/
-```
-
+Expected responses:
 All three should return **HTTP 200** or **HTTP 302** (redirect to login for Grafana).
 
+# Updating the Monitoring Ingress
+
+If you modify the monitoring ingress configuration:
+```
+kubectl apply -f monitoring/ingress.yaml
+```
+Verify the changes:
+```
+kubectl describe ingress monitoring-ingress -n monitoring
+```
+# Route 53 Configuration
+
+Create the following Alias A Records in your Route 53 hosted zone:
+| Record Name    | Type      | Alias Target                            |
+| -------------- | --------- | --------------------------------------- |
+| `prometheus`   | A (Alias) | TravelBooking Application Load Balancer |
+| `alertmanager` | A (Alias) | TravelBooking Application Load Balancer |
+
+Grafana continues to use the main application domain:
+```
+https://steveops.site/grafana
+```
 ### Credentials
 
 | Credential | Value |
 |------------|-------|
 | Grafana Username | `admin` |
 | Grafana Password | `TravelBook@Admin123` |
+
+# Verify Monitoring Resources
+```
+kubectl get pods -n monitoring
+
+kubectl get svc -n monitoring
+
+kubectl get pvc -n monitoring
+
+kubectl get servicemonitors -A
+
+kubectl get prometheusrules -A
+
+kubectl get configmaps -n monitoring -l grafana_dashboard=1
+```
