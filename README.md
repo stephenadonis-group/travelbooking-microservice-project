@@ -395,14 +395,17 @@ docker compose down
 <img src="assets/pic1.JPG" width="900">
 </p>
 
+---
 <p align="center">
 <img src="assets/pic2.JPG" width="900">
 </p>
 
+---
 <p align="center">
 <img src="assets/pic3.JPG" width="900">
 </p>
 
+---
 <p align="center">
 <img src="assets/pic4.JPG" width="900">
 </p>
