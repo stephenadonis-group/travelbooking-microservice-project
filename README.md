@@ -29,6 +29,9 @@ TravelBooking is a cloud-native microservices travel application where users can
   <img src="assets/demo.gif" width="100%">
 </p>
 
+## 🎥 Project Walkthrough
+
+📺 YouTube Demo: https://www.youtube.com/watch?v=7vjscHtgD5Y
 ---
 
 ## Architecture Overview
@@ -336,7 +339,7 @@ travelbooking/
 ├── AWS-terraform1/             # Terraform modules for GCP infrastructure
 ├── jenkins/                   # Jenkins Helm values & setup guide
 ├── monitoring/                # Prometheus, Grafana, alerts, dashboards
-├── https/                     # cert-manager & Let's Encrypt config
+├── https/                     # ACM
 ├── docs/                      # All documentation
 │   ├── postgresql-database-guide.md
 │   ├── gateway-api-dns-guide.md
