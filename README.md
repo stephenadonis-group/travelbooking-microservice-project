@@ -336,7 +336,7 @@ travelbooking/
 ├── postgres/                  # Database init script (5 databases)
 ├── nginx/                     # Reverse proxy config (local dev)
 ├── helm/travel-booking/       # Helm chart for Kubernetes deployment
-├── AWS-terraform1/             # Terraform modules for GCP infrastructure
+├── AWS-terraform1/             # Terraform modules for AWS infrastructure
 ├── jenkins/                   # Jenkins Helm values & setup guide
 ├── monitoring/                # Prometheus, Grafana, alerts, dashboards
 ├── https/                     # ACM
@@ -346,7 +346,7 @@ travelbooking/
 │   ├── docker-compose-local-setup-guide.md
 │   └── https-setup-guide.md
 ├── docker-compose.yml         # Local development setup
-├── Jenkinsfile                # CI/CD pipeline (14 stages)
+├── Jenkinsfile                # CI/CD pipeline 
 └── Makefile                   # Build commands
 ```
 
