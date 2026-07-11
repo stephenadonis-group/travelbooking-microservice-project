@@ -21,6 +21,14 @@ TravelBooking is a cloud-native microservices travel application where users can
 
 🌐 **DNS & Domain Access** — The application is accessible through a custom domain managed via Amazon Route53 Alias records pointing to an AWS Application Load Balancer (ALB). with Hostinger domain
 
+
+
+
+
+<p align="center">
+  <img src="assets/demo.gif" width="100%">
+</p>
+
 ---
 
 ## Architecture Overview
@@ -373,8 +381,29 @@ docker compose down
 | Guide | Description |
 |-------|-------------|
 | [Helm Chart README](helm/travel-booking/README.md) | Helm commands & chart details |
-| [Terraform README](gcp-terraform/README.md) | GCP infrastructure setup |
 | [Jenkins Guide](jenkins/jenkins.md) | Jenkins installation & pipeline |
 | [Monitoring Guide](monitoring/monitoring.md) | Prometheus & Grafana setup |
 | [PostgreSQL Guide](docs/postgresql-database-guide.md) | Database queries & access |
 | [Docker Compose Guide](docs/docker-compose-local-setup-guide.md) | Local development setup |
+
+
+
+<p align="center">
+<img src="assets/pic1.JPG" width="900">
+</p>
+
+<p align="center">
+<img src="assets/pic2.JPG" width="900">
+</p>
+
+<p align="center">
+<img src="assets/pic3.JPG" width="900">
+</p>
+
+<p align="center">
+<img src="assets/pic4.JPG" width="900">
+</p>
+
+<p align="center">
+<img src="assets/pic5.JPG" width="900">
+</p>
