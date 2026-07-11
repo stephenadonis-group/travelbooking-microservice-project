@@ -20,10 +20,10 @@ The TravelBooking app uses **1 PostgreSQL pod** running as a StatefulSet with **
 
 ## Step 1: Connect to the PostgreSQL Pod
 
-First, make sure you're connected to the GKE cluster:
+First, make sure you're connected to the EKS cluster:
 
 ```bash
-gcloud container clusters get-credentials <CLUSTER_NAME> --zone <ZONE> --project <PROJECT_ID>
+aws eks update-kubeconfig --region us-east-1 --cluster travel-booking-eks
 ```
 
 ### Option A: Run a Single Query (Quick)
