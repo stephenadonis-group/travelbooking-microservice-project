@@ -13,7 +13,7 @@ TravelBooking is a cloud-native microservices travel application where users can
 
 ☸️ **Kubernetes & Infrastructure** — Everything runs on **Amazon Elastic Kubernetes Service (Amazon EKS)**. The AWS infrastructure (VPC, subnets, security-groups, ECR Registry, EKS) is created using **Terraform** . The application is deployed using a custom **Helm chart** that creates all Kubernetes resources with one command.
 
-⚙️ **CI/CD with Jenkins** — **Jenkins** runs inside the same EKS cluster and handles CI/CD. The 14-stage pipeline clones code from GitHub, tests services, builds and pushes Docker images to Artifact Registry, scans images with Trivy, packages the Helm chart, and deploys to GKE automatically.
+⚙️ **CI/CD with Jenkins** — **Jenkins** runs inside the same EKS cluster and handles CI/CD. The 14-stage pipeline clones code from GitHub, tests services, builds and pushes Docker images to Artifact Registry, scans images with Trivy, packages the Helm chart, and deploys to EKS automatically.
 
 📊 **Monitoring** — Set up with Prometheus, Grafana, and Alertmanager. Each service exposes metrics that Prometheus scrapes every 15 seconds. Grafana shows 6 custom dashboards, and Alertmanager fires alerts on pod failures, high CPU/memory, or HTTP errors.
 
